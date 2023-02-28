@@ -9,22 +9,15 @@ const {
 const provider = waffle.provider;
 
 describe("FlashSwap Contract", () => {
-  let FLASHSWAP,
-    BORROW_AMOUNT,
-    FUND_AMOUNT,
-    initialFundingHuman,
-    txArbitrage
+  let FLASHSWAP, BORROW_AMOUNT, FUND_AMOUNT, initialFundingHuman, txArbitrage;
 
-  const DECIMALS = 18;
+  const DECIMALS = 6;
 
-  const BUSD_WHALE = "0x8894e0a0c962cb723c1976a4421c95949be2d4e3";
-  const WBNB = "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
-  const BUSD = "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56";
-  const CAKE = "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82";
-  const USDT = "0x55d398326f99059ff775485246999027b3197955";
-  const CROX = "0x2c094f5a7d1146bb93850f629501eb749f6ed491";
+  const USDC_WHALE = "0x78605df79524164911c144801f41e9811b7db73d";
+  const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+  const LINK = "0x514910771AF9Ca656af840dff83E8264EcF986CA";
 
-  const BASE_TOKEN_ADDRESS = BUSD;
+  const BASE_TOKEN_ADDRESS = USDC;
 
   const tokenBase = new ethers.Contract(BASE_TOKEN_ADDRESS, abi, provider);
 
@@ -33,7 +26,8 @@ describe("FlashSwap Contract", () => {
     const [owner] = await ethers.getSigners();
 
     // Ensure that the WHALE has a balance
-    const whale_balance = await provider.getBalance(BUSD_WHALE);
+    const whale_balance = await provider.getBalance(USDC_WHALE);
+    console.log(whale_balance);
     expect(whale_balance).not.equal("0");
 
     const amountToBorrowInHuman = "1";
@@ -41,16 +35,17 @@ describe("FlashSwap Contract", () => {
     initialFundingHuman = "10";
     FUND_AMOUNT = ethers.utils.parseUnits(initialFundingHuman, DECIMALS);
     const flashSwapFactory = await ethers.getContractFactory(
-      "PancakeFlashSwap"
+      "UniswapCrossFlash"
     );
     FLASHSWAP = await flashSwapFactory.deploy();
     await FLASHSWAP.deployed();
 
     await impersonateFundErc20(
       tokenBase,
-      BUSD_WHALE,
+      USDC_WHALE,
       FLASHSWAP.address,
-      initialFundingHuman
+      initialFundingHuman,
+      DECIMALS
     );
   });
 
@@ -68,7 +63,6 @@ describe("FlashSwap Contract", () => {
         ethers.utils.formatUnits(tokenBalances[2], DECIMALS),
         ethers.utils.formatUnits(tokenBalances[3], DECIMALS),
         tokenBalances[3].toString(),
-
         " CHECK THIS"
       );
       const tokenBalanceInHuman = ethers.utils.formatUnits(
@@ -79,8 +73,7 @@ describe("FlashSwap Contract", () => {
     });
 
     it("excutes an arbitrage", async () => {
-      
-      txArbitrage = await FLASHSWAP.startLoan(BUSD, BORROW_AMOUNT);
+      txArbitrage = await FLASHSWAP.startLoan(USDC, BORROW_AMOUNT);
 
       const balanceAfterArbitrage = await FLASHSWAP.getFlashContractBalance(
         BASE_TOKEN_ADDRESS
@@ -90,19 +83,32 @@ describe("FlashSwap Contract", () => {
         DECIMALS
       );
 
-
       const currentBalance = await FLASHSWAP.getFlashContractBalance(
         BASE_TOKEN_ADDRESS
       );
 
-      const currentBalanceCAKE = await FLASHSWAP.getFlashContractBalance(
-        CAKE
+      const currentBalanceLINK = await FLASHSWAP.getFlashContractBalance(LINK);
+
+      console.log("USDC: ", ethers.utils.formatUnits(currentBalance, DECIMALS));
+      console.log(
+        "LINK: ",
+        ethers.utils.formatUnits(currentBalanceLINK, DECIMALS)
       );
 
-      console.log("BUSD: ", ethers.utils.formatUnits(currentBalance, DECIMALS))
-      console.log("CAKE: ", ethers.utils.formatUnits(currentBalanceCAKE, DECIMALS))
-
       assert(txArbitrage);
+    });
+
+    it("provides GAS output", async () => {
+      const txReceipt = await provider.getTransactionReceipt(txArbitrage.hash);
+      const effGasPrice = txReceipt.effectiveGasPrice;
+      const txGasUsed = txReceipt.gasUsed;
+      const gasUsedEth = effGasPrice + txGasUsed;
+
+      console.log(
+        "Total Gas USED: " +
+          ethers.utils.formatEther(gasUsedEth.toString()) * 2900
+      );
+      expect(gasUsedEth).not.equal(0);
     });
   });
 });
