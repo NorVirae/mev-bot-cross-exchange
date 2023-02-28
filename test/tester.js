@@ -13,8 +13,7 @@ describe("FlashSwap Contract", () => {
     BORROW_AMOUNT,
     FUND_AMOUNT,
     initialFundingHuman,
-    txArbitrage,
-    gasUsedUSD;
+    txArbitrage
 
   const DECIMALS = 18;
 
