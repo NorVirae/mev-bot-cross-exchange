@@ -29,9 +29,14 @@ contract UniswapCrossFlash {
 
     // token contract addresses
 
-    address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address private constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address private constant LINK = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
+    // address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    // address private constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    // address private constant LINK = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
+
+    // token addresses for polygon
+    address private constant WETH = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
+    address private constant USDC = 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174;
+    address private constant LINK = 0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39;
 
     // set Deadline
     uint256 private deadline = block.timestamp + 20 minutes;
@@ -50,11 +55,9 @@ contract UniswapCrossFlash {
     }
 
     // get balance of token on contract
-    function getFlashContractBalance(address _token)
-        public
-        view
-        returns (uint256)
-    {
+    function getFlashContractBalance(
+        address _token
+    ) public view returns (uint256) {
         return IERC20(_token).balanceOf(address(this));
     }
 
@@ -76,7 +79,6 @@ contract UniswapCrossFlash {
             _amountIn,
             path
         )[1];
-        console.log("amounts required %s", amountsOutMin);
 
         uint256 amountsReceived = IUniswapV2Router01(router)
             .swapExactTokensForTokens(
@@ -86,21 +88,68 @@ contract UniswapCrossFlash {
                 address(this),
                 deadline
             )[1];
-        console.log("amounts received %s", amountsReceived);
         require(amountsReceived > 0, "Aborted Tx: Trade returned 0");
         return amountsReceived;
+    }
+
+    function checkSwapBuyLocation(
+        uint256 _amountIn,
+        address token1,
+        address token2
+    ) public view returns (string memory) {
+        address[] memory path = new address[](2);
+        path[0] = token1;
+        path[1] = token2;
+
+        address[] memory path2 = new address[](2);
+        path2[0] = token2;
+        path2[1] = token1;
+
+        string memory purchaseAt = "";
+        uint256 firstExchangeTokenOut = IUniswapV2Router01(UNISWAPV2_ROUTER)
+            .getAmountsOut(_amountIn, path)[1];
+        console.log("AmountOut For firstExchange: %s", firstExchangeTokenOut);
+
+        uint256 firstExchangeTokenOutSwapBack = IUniswapV2Router01(
+            SUSHISWAPV2_ROUTER
+        ).getAmountsOut(firstExchangeTokenOut, path2)[1];
+        console.log(
+            "AmountOut For firstExchangeSwapBack: %s",
+            firstExchangeTokenOutSwapBack
+        );
+
+        uint256 secondExchangeTokenOut = IUniswapV2Router01(SUSHISWAPV2_ROUTER)
+            .getAmountsOut(_amountIn, path)[1];
+        console.log("AmountOut For SecondExchange: %s", secondExchangeTokenOut);
+
+        uint256 secondExchangeTokenOutSwapBack = IUniswapV2Router01(
+            UNISWAPV2_ROUTER
+        ).getAmountsOut(secondExchangeTokenOut, path2)[1];
+        console.log(
+            "AmountOut For SecondExchangeSwapBack: %s",
+            secondExchangeTokenOutSwapBack
+        );
+
+        if (firstExchangeTokenOut > secondExchangeTokenOut) {
+            purchaseAt = "uniswap";
+            console.log(
+                "buy at uniswap and sell at sushiswap, uniswap has the lowest price for Dest token"
+            );
+        } else {
+            purchaseAt = "sushiswap";
+            console.log(
+                "buy at sushiswap and sell at uniswap, sushiswap has the lowest price for Dest token"
+            );
+        }
+
+        return purchaseAt;
     }
 
     // Get pair balance
     function getPairBalance()
         public
         view
-        returns (
-            uint256,
-            uint256,
-            uint256,
-            uint256
-        )
+        returns (uint256, uint256, uint256, uint256)
     {
         address pair = IUniswapV2Factory(UNISWAPV2_FACTORY).getPair(USDC, WETH);
 
@@ -117,11 +166,10 @@ contract UniswapCrossFlash {
     }
 
     // Check profitablity
-    function checkProfitability(uint256 input, uint256 output)
-        public
-        pure
-        returns (bool)
-    {
+    function checkProfitability(
+        uint256 input,
+        uint256 output
+    ) public pure returns (bool) {
         bool isOutputBigger = output > input ? true : false;
         return isOutputBigger;
     }
@@ -146,6 +194,9 @@ contract UniswapCrossFlash {
         // get pair
         address token0 = IUniswapV2Pair(pair).token0();
         address token1 = IUniswapV2Pair(pair).token1();
+
+        (uint256 reserve0, uint256 reserve1, ) = IUniswapV2Pair(pair)
+            .getReserves();
         uint256 amountOut0 = _tokenBorrow == token0 ? _amount : 0;
         uint256 amountOut1 = _tokenBorrow == token1 ? _amount : 0;
 
@@ -186,9 +237,6 @@ contract UniswapCrossFlash {
             _data,
             (address, uint256, address)
         );
-
-        IERC20(_tokenBorrow).safeApprove(pair, MAX_INT);
-
         // calculate amount to repay
         uint256 fee = ((_amount * 3) / 997) + 1;
         uint256 amountToRepay = _amount.add(fee);
@@ -196,27 +244,48 @@ contract UniswapCrossFlash {
         // Perform arbitrage
         // get Trade amount
         uint256 tradeAmount = _amount0 > 0 ? _amount0 : _amount1;
-
         // placeTrade
-        uint256 trade1AcquiredCoin = placeTrade(USDC, LINK, tradeAmount, UNISWAPV2_FACTORY, UNISWAPV2_ROUTER);
-        uint256 trade2AcquiredCoin = placeTrade(LINK, USDC, trade1AcquiredCoin, SUSHISWAPV2_FACTORY, SUSHISWAPV2_ROUTER);
+        uint256 trade1AcquiredCoin = placeTrade(
+            USDC,
+            LINK,
+            tradeAmount,
+            UNISWAPV2_FACTORY,
+            UNISWAPV2_ROUTER
+        );
+        uint256 trade2AcquiredCoin = placeTrade(
+            LINK,
+            USDC,
+            trade1AcquiredCoin,
+            SUSHISWAPV2_FACTORY,
+            SUSHISWAPV2_ROUTER
+        );
+
+        address pairGuy = IUniswapV2Factory(UNISWAPV2_FACTORY).getPair(
+            USDC,
+            LINK
+        );
+
+        (uint256 reserve0, uint256 reserve1, ) = IUniswapV2Pair(pairGuy)
+            .getReserves();
+        console.log("Reserve 1: %s", reserve0);
+        console.log("Reserve 2: %s", reserve1);
 
         // check trade profitablity
-        // bool isOutputBigger = checkProfitability(
-        //     amountToRepay,
-        //     trade2AcquiredCoin
-        // );
-        // require(!isOutputBigger, "Trade not profitable");
+        bool isOutputBigger = checkProfitability(
+            amountToRepay,
+            trade2AcquiredCoin
+        );
+        require(isOutputBigger, "Trade not profitable");
 
         // if (isOutputBigger) {
         //     IERC20 otherToken = IERC20(WETH);
         //     otherToken.transfer(myAddress, trade2AcquiredCoin - amountToRepay);
         // }
-        // console.log(
-        //     "SOL: check amount %s, balance: %s",
-        //     amountToRepay,
-        //     IERC20(_tokenBorrow).balanceOf(address(this))
-        // );
+        console.log(
+            "SOL: check amount %s, balance: %s",
+            amountToRepay,
+            IERC20(_tokenBorrow).balanceOf(address(this))
+        );
 
         // Pay back loan
         IERC20(_tokenBorrow).safeTransfer(pair, amountToRepay);

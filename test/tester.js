@@ -9,13 +9,21 @@ const {
 const provider = waffle.provider;
 
 describe("FlashSwap Contract", () => {
-  let FLASHSWAP, BORROW_AMOUNT, FUND_AMOUNT, initialFundingHuman, txArbitrage;
+  let FLASHSWAP,
+    FLASHSWAPV3,
+    BORROW_AMOUNT,
+    FUND_AMOUNT,
+    initialFundingHuman,
+    _swapRouter = "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+    _factory = "0x1F98431c8aD98523631AE4a59f267346ea31F984	",
+    _WETH9 = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+    txArbitrage;
 
   const DECIMALS = 6;
 
-  const USDC_WHALE = "0x78605df79524164911c144801f41e9811b7db73d";
-  const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
-  const LINK = "0x514910771AF9Ca656af840dff83E8264EcF986CA";
+  const USDC_WHALE = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
+  const USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
+  const LINK = "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39";
 
   const BASE_TOKEN_ADDRESS = USDC;
 
@@ -30,15 +38,22 @@ describe("FlashSwap Contract", () => {
     console.log(whale_balance);
     expect(whale_balance).not.equal("0");
 
-    const amountToBorrowInHuman = "1";
+    const amountToBorrowInHuman = "10000";
     BORROW_AMOUNT = ethers.utils.parseUnits(amountToBorrowInHuman, DECIMALS);
-    initialFundingHuman = "10";
+    console.log(BORROW_AMOUNT.toString(), "HEYA");
+    initialFundingHuman = "10000";
     FUND_AMOUNT = ethers.utils.parseUnits(initialFundingHuman, DECIMALS);
     const flashSwapFactory = await ethers.getContractFactory(
       "UniswapCrossFlash"
     );
     FLASHSWAP = await flashSwapFactory.deploy();
     await FLASHSWAP.deployed();
+
+    const flashSwapV3Swap = await ethers.getContractFactory(
+      "UniswapV3CrossFlash"
+    );
+    FLASHSWAPV3 = flashSwapV3Swap.deploy(_swapRouter, _factory, _WETH9);
+    await FLASHSWAPV3.deployed();
 
     await impersonateFundErc20(
       tokenBase,
@@ -47,6 +62,21 @@ describe("FlashSwap Contract", () => {
       initialFundingHuman,
       DECIMALS
     );
+    await impersonateFundErc20(
+      tokenBase,
+      USDC_WHALE,
+      FLASHSWAPV3.address,
+      initialFundingHuman,
+      DECIMALS
+    );
+  });
+
+  describe("Uniswap V3 cross Exchange arbitrage", () => {
+    it("it should return router address", async () => {
+      let router = await FLASHSWAPV3.swapRouter();
+      console.log(router);
+      expect(router).equal(_swapRouter);
+    });
   });
 
   describe("Arbitrage Execution", () => {
@@ -56,20 +86,22 @@ describe("FlashSwap Contract", () => {
       );
 
       const tokenBalances = await FLASHSWAP.getPairBalance();
-      console.log(
-        "CHECK THIS ",
-        ethers.utils.formatUnits(tokenBalances[0], DECIMALS),
-        ethers.utils.formatUnits(tokenBalances[1], DECIMALS),
-        ethers.utils.formatUnits(tokenBalances[2], DECIMALS),
-        ethers.utils.formatUnits(tokenBalances[3], DECIMALS),
-        tokenBalances[3].toString(),
-        " CHECK THIS"
-      );
+
       const tokenBalanceInHuman = ethers.utils.formatUnits(
         tokenBalance,
         DECIMALS
       );
       expect(Number(tokenBalanceInHuman)).equal(Number(initialFundingHuman));
+    });
+
+    it("it should check exchange to buy from ", async () => {
+      const buyExchange = await FLASHSWAP.checkSwapBuyLocation(
+        BORROW_AMOUNT,
+        USDC,
+        LINK
+      );
+      console.log(buyExchange);
+      expect(buyExchange).not.equal("");
     });
 
     it("excutes an arbitrage", async () => {
@@ -88,12 +120,6 @@ describe("FlashSwap Contract", () => {
       );
 
       const currentBalanceLINK = await FLASHSWAP.getFlashContractBalance(LINK);
-
-      console.log("USDC: ", ethers.utils.formatUnits(currentBalance, DECIMALS));
-      console.log(
-        "LINK: ",
-        ethers.utils.formatUnits(currentBalanceLINK, DECIMALS)
-      );
 
       assert(txArbitrage);
     });
