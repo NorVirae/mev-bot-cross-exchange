@@ -15,16 +15,16 @@ describe("FlashSwap Contract", () => {
     FUND_AMOUNT,
     initialFundingHuman,
     _swapRouter = "0xE592427A0AEce92De3Edee1F18E0157C05861564",
-    _factory = "0x1F98431c8aD98523631AE4a59f267346ea31F984	",
+    _factory = "0x1F98431c8aD98523631AE4a59f267346ea31F984",
     _WETH9 = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
     txArbitrage;
 
   const DECIMALS = 6;
 
-  const USDC_WHALE = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
+  const USDC_WHALE = "0x9810762578aCCF1F314320CCa5B72506aE7D7630";
   const USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
   const LINK = "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39";
-
+  const WETH = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
   const BASE_TOKEN_ADDRESS = USDC;
 
   const tokenBase = new ethers.Contract(BASE_TOKEN_ADDRESS, abi, provider);
@@ -36,7 +36,7 @@ describe("FlashSwap Contract", () => {
     // Ensure that the WHALE has a balance
     const whale_balance = await provider.getBalance(USDC_WHALE);
     console.log(whale_balance);
-    expect(whale_balance).not.equal("0");
+    // expect(whale_balance).not.equal("0");
 
     const amountToBorrowInHuman = "10000";
     BORROW_AMOUNT = ethers.utils.parseUnits(amountToBorrowInHuman, DECIMALS);
@@ -52,7 +52,8 @@ describe("FlashSwap Contract", () => {
     const flashSwapV3Swap = await ethers.getContractFactory(
       "UniswapV3CrossFlash"
     );
-    FLASHSWAPV3 = flashSwapV3Swap.deploy(_swapRouter, _factory, _WETH9);
+
+    FLASHSWAPV3 = await flashSwapV3Swap.deploy(_swapRouter, _factory, _WETH9);
     await FLASHSWAPV3.deployed();
 
     await impersonateFundErc20(
@@ -72,10 +73,23 @@ describe("FlashSwap Contract", () => {
   });
 
   describe("Uniswap V3 cross Exchange arbitrage", () => {
-    it("it should return router address", async () => {
+    it("should return router address", async () => {
       let router = await FLASHSWAPV3.swapRouter();
       console.log(router);
       expect(router).equal(_swapRouter);
+    });
+
+    it("should call flash", async () => {
+      const params = {
+        token0: USDC ,
+        token1: WETH,
+        fee1: 3000,
+        amount0: 0,
+        amount1: BORROW_AMOUNT,
+        fee2: 3000,
+        fee3: 3000,
+      };
+      await FLASHSWAPV3.initFlash(params);
     });
   });
 

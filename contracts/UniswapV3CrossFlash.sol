@@ -11,6 +11,7 @@ import '@uniswap/v3-periphery/contracts/libraries/PoolAddress.sol';
 import '@uniswap/v3-periphery/contracts/libraries/CallbackValidation.sol';
 import '@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol';
 import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
+import "hardhat/console.sol";
 
 /// @title Flash contract implementation
 /// @notice An example contract using the Uniswap V3 flash function
@@ -19,13 +20,13 @@ contract UniswapV3CrossFlash is IUniswapV3FlashCallback, PeripheryImmutableState
     using LowGasSafeMath for int256;
 
     ISwapRouter public immutable swapRouter;
-
+ 
     constructor(
-        ISwapRouter _swapRouter,
+        address _swapRouter,
         address _factory,
         address _WETH9
     ) PeripheryImmutableState(_factory, _WETH9) {
-        swapRouter = _swapRouter;
+        swapRouter = ISwapRouter(_swapRouter);
     }
 
     /// @param fee0 The fee from calling flash for token0
@@ -44,6 +45,7 @@ contract UniswapV3CrossFlash is IUniswapV3FlashCallback, PeripheryImmutableState
         address token0 = decoded.poolKey.token0;
         address token1 = decoded.poolKey.token1;
 
+
         TransferHelper.safeApprove(token0, address(swapRouter), decoded.amount0);
         TransferHelper.safeApprove(token1, address(swapRouter), decoded.amount1);
 
@@ -51,6 +53,7 @@ contract UniswapV3CrossFlash is IUniswapV3FlashCallback, PeripheryImmutableState
         // exactInputSingle will fail if this amount not met
         uint256 amount1Min = LowGasSafeMath.add(decoded.amount1, fee1);
         uint256 amount0Min = LowGasSafeMath.add(decoded.amount0, fee0);
+        console.log("Account Balance: token0 %s, token1: %s", IERC20(address(token0)).balanceOf(address(this)), IERC20(address(token1)).balanceOf(address(this)));
 
         // call exactInputSingle for swapping token1 for token0 in pool w/fee2
         uint256 amountOut0 =
@@ -126,11 +129,14 @@ contract UniswapV3CrossFlash is IUniswapV3FlashCallback, PeripheryImmutableState
         PoolAddress.PoolKey poolKey;
         uint24 poolFee2;
         uint24 poolFee3;
+
     }
 
     /// @param params The parameters necessary for flash and the callback, passed in as FlashParams
     /// @notice Calls the pools flash function with data needed in `uniswapV3FlashCallback`
     function initFlash(FlashParams memory params) external {
+
+        console.log(" this is token0: %s", params.token0, params.amount1);
         PoolAddress.PoolKey memory poolKey =
             PoolAddress.PoolKey({token0: params.token0, token1: params.token1, fee: params.fee1});
         IUniswapV3Pool pool = IUniswapV3Pool(PoolAddress.computeAddress(factory, poolKey));
@@ -151,6 +157,7 @@ contract UniswapV3CrossFlash is IUniswapV3FlashCallback, PeripheryImmutableState
                     poolKey: poolKey,
                     poolFee2: params.fee2,
                     poolFee3: params.fee3
+                  
                 })
             )
         );

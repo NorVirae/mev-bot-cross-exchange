@@ -20,6 +20,7 @@ module.exports = {
   solidity: {
     compilers: [
       { version: "0.5.5" },
+
       { version: "0.6.6" },
       { version: "0.7.6" },
 
@@ -30,7 +31,7 @@ module.exports = {
     hardhat: {
       forking: {
         url: "https://polygon-mainnet.g.alchemy.com/v2/gH78C8vl7np7QRckV5ApvVBhTRZdbW8S",
-        blockNumber: 16790201
+        // blockNumber: 16790201
       },
     },
     testnet: {
