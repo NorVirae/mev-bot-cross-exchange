@@ -18,6 +18,9 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
  */
 module.exports = {
   solidity: {
+    mocha: {
+      timeout: 100000000,
+    },
     compilers: [
       { version: "0.5.5" },
 
@@ -30,8 +33,8 @@ module.exports = {
   networks: {
     hardhat: {
       forking: {
-        url: "https://polygon-mainnet.g.alchemy.com/v2/gH78C8vl7np7QRckV5ApvVBhTRZdbW8S",
-        // blockNumber: 16790201
+        url: "https://polygon-mainnet.g.alchemy.com/v2/N8cyw-7E92FP1U7--nwsBLZX4HOhz9Wl",
+        // blockNumber: 40260404
       },
     },
     testnet: {
@@ -42,7 +45,7 @@ module.exports = {
       ],
     },
     mainnet: {
-      url: "https://polygon-mainnet.g.alchemy.com/v2/gH78C8vl7np7QRckV5ApvVBhTRZdbW8S",
+      url: "https://polygon-mainnet.g.alchemy.com/v2/N8cyw-7E92FP1U7--nwsBLZX4HOhz9Wl",
       chainId: 1,
       accounts: [
         "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",

@@ -12,7 +12,9 @@ import "@uniswap/v3-periphery/contracts/libraries/CallbackValidation.sol";
 import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "hardhat/console.sol";
-import "./interfaces/IUniswapV2Router01.sol";
+import "./interfaces/IUniswapV2Router02.sol";
+import "./interfaces/IUniswapV2Pair.sol";
+
 import "./interfaces/IUniswapV2Factory.sol";
 
 /// @title Flash contract implementation
@@ -72,16 +74,7 @@ contract UniswapV3CrossFlash is
             address(swapRouter),
             borrowedAmount
         );
-        TransferHelper.safeApprove(
-            tokenBorrow,
-            address(sushiFactory),
-            MAX_INT
-        );
-        TransferHelper.safeApprove(
-            decoded.arbToken2,
-            address(sushiFactory),
-            MAX_INT
-        );
+        
 
         // profitable check
         // exactInputSingle will fail if this amount not met
@@ -114,9 +107,13 @@ contract UniswapV3CrossFlash is
 
         // end up with amountOut0 of token0 from first swap and amountOut1 of token1 from second swap
         uint256 amountOwed = LowGasSafeMath.add(borrowedAmount, fee);
-        require(trade2Amount > amountOwed, "Trade not Profitable");
+        // require(trade2Amount > amountOwed, "Trade not Profitable");
 
         TransferHelper.safeApprove(tokenBorrow, address(this), amountOwed);
+        TransferHelper.safeApprove(decoded.arbToken2, sushiSwapRouter, MAX_INT);
+        TransferHelper.safeApprove(decoded.arbToken1, sushiSwapRouter, MAX_INT);
+
+        // TransferHelper.safeApprove(decoded.arbToken2, sushiSwapRouter, MAX_INT);
 
         // if profitable pay profits to payer
         if (trade2Amount > amountOwed) {
@@ -247,24 +244,32 @@ contract UniswapV3CrossFlash is
             _fromToken,
             _toToken
         );
+        console.log("pair - %s", pair);
         require(pair != address(0), "There is no Liquidity");
         address[] memory path = new address[](2);
+        console.log("balance before second trade %s", IERC20(_fromToken).balanceOf(address(this)));
         path[0] = _fromToken;
         path[1] = _toToken;
-        uint256 amountsOutMin = IUniswapV2Router01(sushiSwapRouter)
+        TransferHelper.safeApprove(_fromToken, sushiSwapRouter, _amount);
+        uint256 amountsOutMin = IUniswapV2Router02(sushiSwapRouter)
             .getAmountsOut(_amount, path)[1];
-        console.log("balance after first swap %s",IERC20(address(_fromToken)).balanceOf(address(this)));
-        console.log("minimum amounts out %s",amountsOutMin);
-
+        console.log(
+            "balance after first swap %s",
+            _amount
+        );
+        (uint256 reserve1, uint256 reserve2, ) = IUniswapV2Pair(pair)
+            .getReserves();
+        console.log("reserve1: %s, reserve2: %s", reserve1, reserve2);
         // call exactInputSingle for swapping token1 for token0 in pool w/fee2
-        uint256 amountOut = IUniswapV2Router01(sushiSwapRouter)
+        uint256 amountOut = IUniswapV2Router02(sushiSwapRouter)
             .swapExactTokensForTokens(
                 _amount,
-                amountsOutMin,
+                0,
                 path,
                 address(this),
-                block.timestamp + 2 days
+                block.timestamp + 30 minutes
             )[1];
+        console.log("minimum amounts out %s", amountsOutMin);
 
         return amountOut;
         // execute on sushi

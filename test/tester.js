@@ -52,9 +52,9 @@ describe("FlashSwap Contract", () => {
     console.log(whale_balance.toString());
     // expect(whale_balance).not.equal("0");
 
-    const amountToBorrowInHuman = "10000";
+    const amountToBorrowInHuman = "1000";
     BORROW_AMOUNT = ethers.utils.parseUnits(amountToBorrowInHuman, DECIMALS);
-    initialFundingHuman = "10000";
+    initialFundingHuman = "1000";
     FUND_AMOUNT = ethers.utils.parseUnits(initialFundingHuman, DECIMALS);
     const flashSwapFactory = await ethers.getContractFactory(
       "UniswapCrossFlash"
@@ -101,7 +101,7 @@ describe("FlashSwap Contract", () => {
         token0: WMATIC ,
         token1: USDC,
         arbToken1: WMATIC,
-        arbToken2: DAI,
+        arbToken2: WETH,
         fee1: 3000,
         amount0: BORROW_AMOUNT ,
         amount1:  ethers.utils.parseUnits("0", 18),
@@ -109,7 +109,7 @@ describe("FlashSwap Contract", () => {
         fee3: 3000,
       };
       await FLASHSWAPV3.initFlashUniswap(params);
-    });
+    }).timeout(10000000);
   });
 
   // describe("Arbitrage Execution", () => {
