@@ -25,6 +25,7 @@ module.exports = {
       { version: "0.5.5" },
 
       { version: "0.6.6" },
+
       { version: "0.7.6" },
 
       { version: "0.8.8" },
@@ -34,7 +35,7 @@ module.exports = {
     hardhat: {
       forking: {
         url: "https://polygon-mainnet.g.alchemy.com/v2/N8cyw-7E92FP1U7--nwsBLZX4HOhz9Wl",
-        // blockNumber: 40260404
+        // blockNumber: 40489727
       },
     },
     testnet: {

@@ -27,6 +27,19 @@ contract UniswapV3CrossFlash is
     using LowGasSafeMath for uint256;
     using LowGasSafeMath for int256;
 
+    struct exactInputParams {
+        address tokenIn;
+        address tokenOut;
+        uint24 fee;
+        address recipient;
+        uint256 deadline;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+        uint160 sqrtPriceLimitX96;
+    }
+
+    uint256 tradePriceTotal;
+
     ISwapRouter public immutable swapRouter;
     address public immutable sushiSwapRouter;
     address public sushiFactory = 0xc35DADB65012eC5796536bD9864eD8773aBc74C4;
@@ -69,12 +82,13 @@ contract UniswapV3CrossFlash is
 
         uint256 fee = decoded.amount0 > 0 ? fee0 : fee1;
 
+        TransferHelper.safeApprove(tokenBorrow, address(swapRouter), MAX_INT);
+
         TransferHelper.safeApprove(
-            tokenBorrow,
+            decoded.arbToken2,
             address(swapRouter),
-            borrowedAmount
+            MAX_INT
         );
-        
 
         // profitable check
         // exactInputSingle will fail if this amount not met
@@ -90,25 +104,54 @@ contract UniswapV3CrossFlash is
             decoded.arbToken1 == tokenBorrow,
             "arbToken1 should be the token borrowed"
         );
-        console.log("borrow Amount 1 :%s", borrowedAmount);
         // Perform arbitrage
-        uint256 trade1Amount = placeTradeUniswap(
-            decoded.arbToken1,
-            decoded.arbToken2,
-            borrowedAmount
-        );
+        // 1 means trade on uniswap first, 0 means trade on sushi first
+        uint256 trade1Amount;
+        uint256 trade2Amount;
+        if (decoded.buyType == 0) {
+            console.log("BUYING FROM SUSHI...");
+            trade1Amount = placeTradeSushi(
+                decoded.arbToken1,
+                decoded.arbToken2,
+                borrowedAmount
+            );
 
-        console.log("trade Amount 1 :%s", trade1Amount);
-        uint256 trade2Amount = placeTradeSushi(
-            decoded.arbToken2,
-            decoded.arbToken1,
-            trade1Amount
-        );
+            trade2Amount = placeTradeUniswap(
+                decoded.arbToken2,
+                decoded.arbToken1,
+                trade1Amount
+            );
+
+            console.log("TRADE2AMOUNT SUSHI, %s", trade2Amount);
+        } else {
+            console.log("BUYING FROM UNISWAP...");
+
+            trade1Amount = placeTradeUniswap(
+                decoded.arbToken1,
+                decoded.arbToken2,
+                borrowedAmount
+            );
+
+            trade2Amount = placeTradeSushi(
+                decoded.arbToken2,
+                decoded.arbToken1,
+                trade1Amount
+            );
+
+            console.log("TRADE2AMOUNT UNISWAP, %s", trade2Amount);
+        }
+
+        console.log("trade Amount 2 : %s", trade2Amount);
 
         // end up with amountOut0 of token0 from first swap and amountOut1 of token1 from second swap
         uint256 amountOwed = LowGasSafeMath.add(borrowedAmount, fee);
         // require(trade2Amount > amountOwed, "Trade not Profitable");
-
+        console.log(
+            "Amount after swap : %s, amount owed : %s, amount borrowed: %s",
+            trade2Amount,
+            amountOwed,
+            borrowedAmount
+        );
         TransferHelper.safeApprove(tokenBorrow, address(this), amountOwed);
         TransferHelper.safeApprove(decoded.arbToken2, sushiSwapRouter, MAX_INT);
         TransferHelper.safeApprove(decoded.arbToken1, sushiSwapRouter, MAX_INT);
@@ -155,6 +198,7 @@ contract UniswapV3CrossFlash is
         uint256 amount1;
         uint24 fee2;
         uint24 fee3;
+        uint8 buyType;
     }
     // fee2 and fee3 are the two other fees associated with the two other pools of token0 and token1
     struct FlashCallbackData {
@@ -166,6 +210,7 @@ contract UniswapV3CrossFlash is
         PoolAddress.PoolKey poolKey;
         uint24 poolFee2;
         uint24 poolFee3;
+        uint8 buyType;
     }
 
     /// @param params The parameters necessary for flash and the callback, passed in as FlashParams
@@ -176,10 +221,6 @@ contract UniswapV3CrossFlash is
             token1: params.token1,
             fee: params.fee1
         });
-        console.log(
-            " pool address: %s",
-            PoolAddress.computeAddress(factory, poolKey)
-        );
 
         IUniswapV3Pool pool = IUniswapV3Pool(
             PoolAddress.computeAddress(factory, poolKey)
@@ -202,7 +243,8 @@ contract UniswapV3CrossFlash is
                     payer: msg.sender,
                     poolKey: poolKey,
                     poolFee2: params.fee2,
-                    poolFee3: params.fee3
+                    poolFee3: params.fee3,
+                    buyType: params.buyType
                 })
             )
         );
@@ -214,7 +256,6 @@ contract UniswapV3CrossFlash is
         uint256 _amount
     ) internal returns (uint256) {
         // execute on uniswap
-        console.log("amount to trade %s ", _amount);
         // call exactInputSingle for swapping token1 for token0 in pool w/fee2
         uint256 amountOut = swapRouter.exactInputSingle(
             ISwapRouter.ExactInputSingleParams({
@@ -229,8 +270,6 @@ contract UniswapV3CrossFlash is
             })
         );
 
-        console.log("Amount out from trade %s", amountOut);
-
         return amountOut;
     }
 
@@ -244,22 +283,16 @@ contract UniswapV3CrossFlash is
             _fromToken,
             _toToken
         );
-        console.log("pair - %s", pair);
         require(pair != address(0), "There is no Liquidity");
         address[] memory path = new address[](2);
-        console.log("balance before second trade %s", IERC20(_fromToken).balanceOf(address(this)));
+
         path[0] = _fromToken;
         path[1] = _toToken;
         TransferHelper.safeApprove(_fromToken, sushiSwapRouter, _amount);
         uint256 amountsOutMin = IUniswapV2Router02(sushiSwapRouter)
             .getAmountsOut(_amount, path)[1];
-        console.log(
-            "balance after first swap %s",
-            _amount
-        );
         (uint256 reserve1, uint256 reserve2, ) = IUniswapV2Pair(pair)
             .getReserves();
-        console.log("reserve1: %s, reserve2: %s", reserve1, reserve2);
         // call exactInputSingle for swapping token1 for token0 in pool w/fee2
         uint256 amountOut = IUniswapV2Router02(sushiSwapRouter)
             .swapExactTokensForTokens(
@@ -269,9 +302,31 @@ contract UniswapV3CrossFlash is
                 address(this),
                 block.timestamp + 30 minutes
             )[1];
-        console.log("minimum amounts out %s", amountsOutMin);
 
         return amountOut;
         // execute on sushi
+    }
+
+    // an exact input caller function for msg.sender
+    function exactInput(exactInputParams memory _inputs) public {
+        TransferHelper.safeApprove(_inputs.tokenIn, address(swapRouter), _inputs.amountIn);
+        uint256 amountOut = swapRouter.exactInputSingle(
+            ISwapRouter.ExactInputSingleParams({
+                tokenIn: _inputs.tokenIn,
+                tokenOut: _inputs.tokenOut,
+                fee: _inputs.fee,
+                recipient: msg.sender,
+                deadline: block.timestamp + 2 days,
+                amountIn: _inputs.amountIn,
+                amountOutMinimum: _inputs.amountOutMinimum,
+                sqrtPriceLimitX96: _inputs.sqrtPriceLimitX96
+            })
+        );
+
+        tradePriceTotal = amountOut;
+    }
+
+    function getTransactionFinalPrice() public view returns (uint256) {
+        return tradePriceTotal;
     }
 }

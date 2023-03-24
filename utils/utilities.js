@@ -23,6 +23,7 @@ const impersonateFundErc20 = async (contract, sender, recepient, amount, decimal
   });
 };
 
+
 module.exports = {
-  impersonateFundErc20: impersonateFundErc20,
+  impersonateFundErc20: impersonateFundErc20
 };
