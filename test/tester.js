@@ -13,6 +13,7 @@ const {
 } = require("../artifacts/contracts/interfaces/IERC20.sol/IERC20.json");
 const IUniswapV3PoolABI = require("@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json");
 const Quoter = require("@uniswap/v3-periphery/artifacts/contracts/lens/Quoter.sol/Quoter.json");
+const { checkProfitableBuyExchange } = require("../utils/trade");
 
 const provider = waffle.provider;
 
@@ -46,219 +47,6 @@ describe("FlashSwap Contract", () => {
 
   const tokenBase = new ethers.Contract(BASE_TOKEN_ADDRESS, abi, provider);
 
-  async function exchangeSelectorForPriceOutput(exchange) {
-    let smallestAmountOut = 0;
-
-    if (exchange.type == "uniswap") {
-      smallestAmountOut = await exchange.contractInstance.quoteExactInputSingle(
-        exchange.params
-      );
-    }
-
-    if (exchange.type == "sushiswap") {
-      smallestAmountOut = await exchange.contractInstance.getAmountsOut(
-        exchange.params
-      );
-    }
-
-    return smallestAmountOut;
-  }
-
-  async function exchangeSelectorForConclusiveAmountsOut(exchange, params) {
-    let amountsOut = 0;
-    if (exchange.type == "uniswap") {
-      amountsOut = await exchange.contractInstance.quoteExactInputSingle(
-        params
-      );
-    }
-
-    if (exchange.type == "sushiswap") {
-      amountsOut = await exchange.contractInstance.getAmountsOut(params);
-    }
-    return amountsOut;
-  }
-
-  async function getMostProfitableExchangeByComparison(
-    amountInfoFromFirstEx,
-    amountInfoFromSecondEx
-  ) {
-    if (amountInfoFromFirstEx.amount > amountInfoFromSecondEx.amount) {
-      return amountInfoFromFirstEx.exchangeType;
-    }
-
-    return amountInfoFromSecondEx.exchangeType;
-  }
-
-  async function getMostProfitableExchangeByComparisonTraded(
-    amountOutInfoFromFirstExchange,
-    amountOutInfoFromSecondExchange,
-    calculatedBuyExchange
-  ) {
-    let buyfromExchange = "";
-    if (
-      amountOutInfoFromFirstExchange.amount >
-        amountOutInfoFromSecondExchange.amount &&
-      calculatedBuyExchange == amountOutInfoFromFirstExchange.exchangeType
-    ) {
-      buyfromExchange = amountOutInfoFromFirstExchange.type;
-      return {
-        type: buyfromExchange,
-        amountsOut: amountOutInfoFromFirstExchange.amount,
-      };
-    } else if (
-      amountOutInfoFromFirstExchange.amount >
-        amountOutInfoFromSecondExchange.amount &&
-      calculatedBuyExchange == amountOutInfoFromFirstExchange.exchangeType
-    ) {
-      buyfromExchange = amountOutInfoFromSecondExchange.type;
-      return {
-        type: buyfromExchange,
-        amountsOut: amountOutInfoFromSecondExchange.amount,
-      };
-    } else {
-      console.log(
-        "exchange amount for most profitable exchange has high slippage"
-      );
-      return -1;
-    }
-  }
-
-  async function slippageAmountCalculator(firstAmount, secondAmount) {
-    let slipPercent = 0;
-    let slipAmount = 0;
-
-    // second amount is price affected by slippage
-    slipAmount = firstAmount - secondAmount;
-    console.log("Amount lost due to slippage: ", slipAmount);
-
-    // slip percentage
-    slipPercent = (slipAmount / firstAmount) * 100;
-    console.log("slippage percentage: ", slipPercent);
-    return {
-      slipAmount,
-      slipPercent
-    }
-  }
-
-  async function checkProfitableBuyExchange(
-    firstExchangeInfo,
-    secondExchangeInfo,
-    tradeAmount,
-    fee
-  ) {
-    // logs
-    // log 1 - exchange amount for most profitable exchange has high slippage, return
-    // log 2 - exchange is profitable with slippage applied
-    // log 3 - exchange is profitable with slippage removed
-    // log 4 - opposite of log 2
-    // log 5 - opposite of log 3
-
-    // 0 exchange to buy variable
-    let calculatedBuyExchange = "";
-    let buyExchange = "uniswap";
-    let buyExchangeInProspect = { exchangeType: "", amountsOut: 0 };
-    const smallAmountOutForOneQuantityFirstEx = 0;
-    const smallAmountOutForOneQuantitySecondEx = 0;
-    let maximumAmountOutForFirstEx = 0;
-    let maximumAmountOutForSecondEx = 0;
-    let maximumAmountOutForFirstExTraded = 0;
-    let maximumAmountOutForSecondExTraded = 0;
-    // ===MAJOR TASK=== 1 get the smallest unit price from first exchange
-    // ---- 1 usdc == how many weth
-
-    smallAmountOutForOneQuantityFirstEx = await exchangeSelectorForPriceOutput(
-      firstExchangeInfo
-    );
-
-    // === MAJOR TASK === 2 get the smallest unit price from second exchange
-    smallAmountOutForOneQuantitySecondEx = await exchangeSelectorForPriceOutput(
-      secondExchangeInfo
-    );
-
-    // === MAJOR TASK === 3 calculate potential price based on amount to be used on trade for first exchange
-    //  x = smallAmountOut * tradeAmount
-    maximumAmountOutForFirstEx =
-      smallAmountOutForOneQuantityFirstEx * tradeAmount;
-
-    // === MAJOR TASK === 4 calculate potential price based on amount to be used on trade for second exchange
-    //  x = smallAmountOut * tradeAmount
-    maximumAmountOutForSecondEx =
-      smallAmountOutForOneQuantitySecondEx * tradeAmount;
-
-    // === MAJOR TASK === 5 get the most profitable exchange
-    calculatedBuyExchange = getMostProfitableExchangeByComparison(
-      {
-        exchangeType: firstExchangeInfo.type,
-        amount: maximumAmountOutForFirstEx,
-      },
-      {
-        exchangeType: secondExchangeInfo.type,
-        amount: maximumAmountOutForSecondEx,
-      }
-    );
-    // === MAJOR TASK === 6 get the possible amounts out from first exchange, slippage applied
-    maximumAmountOutForFirstExTraded = exchangeSelectorForConclusiveAmountsOut(
-      firstExchangeInfo,
-      firstExchangeInfo.params
-    );
-    // === MAJOR TASK === 7 get the possible amounts out from second exchange, slippage applied
-    maximumAmountOutForSecondExTraded = exchangeSelectorForConclusiveAmountsOut(
-      secondExchangeInfo,
-      secondExchangeInfo.params
-    );
-
-    // === MAJOR TASK === 8 compare prices from 6 and 7 if most profitable exchanges equals the one from 5 move to next step else go to log 1
-    buyExchangeInProspect = getMostProfitableExchangeByComparisonTraded(
-      {
-        exchangeType: firstExchangeInfo.type,
-        amount: maximumAmountOutForFirstExTraded,
-      },
-      {
-        exchangeType: secondExchangeInfo.type,
-        amount: maximumAmountOutForSecondExTraded,
-      }
-    );
-
-    if (buyExchangeInProspect == -1) {
-      return;
-    }
-
-    // === MAJOR TASK === 9 get the percentage and amounts lost due to slippage
-    let slippageInfo;
-    if (buyExchangeInProspect.type == firstExchangeInfo.type) {
-      slippageInfo = slippageAmountCalculator(
-        maximumAmountOutForFirstEx,
-        maximumAmountOutForFirstExTraded
-      );
-    } else {
-      slippageInfo = slippageAmountCalculator(
-        maximumAmountOutForSecondEx,
-        maximumAmountOutForSecondExTraded
-      );
-    }
-
-    // === MAJOR TASK === 10 compare the amounts out from 8 plus slippage, check if amount is greater than initial investment plus fee goto log 2 else go to log 4
-    if( buyExchangeInProspect.amountsOut > tradeAmount + fee){
-      console.log("exchange is profitable with slippage applied")
-      buyExchange = buyExchangeInProspect.type
-    }else {
-      console.log("exchange is not profitable with slippage applied")
-      return
-    }
-    
-
-    // === MAJOR TASK === 11 compare the amounts out from 8 minus slippage, check if amount is greater than initial investment plus fee goto log 3 else got to log 5
-    if( buyExchangeInProspect.amountsOut + (await slippageInfo).slipAmount > tradeAmount + fee){
-      console.log("exchange is profitable with slippage removed")
-      buyExchange = buyExchangeInProspect.type
-    }else{
-      console.log("exchange is not profitable with slippage removed")
-      return
-    }
-    // === MAJOR TASK === 12 if 10 is profitable return that exchange as the buy exchange and second exchange as the sell exchange
-    return buyExchange
-  }
-
   beforeEach(async () => {
     // Get owner as signer
     const [owner] = await ethers.getSigners();
@@ -288,6 +76,8 @@ describe("FlashSwap Contract", () => {
       _sushiSwapRouter
     );
     await FLASHSWAPV3.deployed();
+
+    // fund singer account
     await impersonateFundErc20(
       tokenBase,
       USDC_WHALE,
@@ -295,14 +85,8 @@ describe("FlashSwap Contract", () => {
       initialFundingHuman,
       DECIMALS
     );
-    await impersonateFundErc20(
-      tokenBase,
-      USDC_WHALE,
-      FLASHSWAP.address,
-      initialFundingHuman,
-      DECIMALS
-    );
 
+    // fund sniper contract
     await impersonateFundErc20(
       tokenBase,
       USDC_WHALE,
@@ -320,197 +104,52 @@ describe("FlashSwap Contract", () => {
     });
 
     it("should call flash", async () => {
-      // Token
-      const WETH_TOKEN = new Token(
-        SupportedChainId.POLYGON,
-        WETH,
-        18,
-        "WETH",
-        "Wrapped Ether"
-      );
+      // MAJOR - setup all variables
+      let firstExchangeInfo = {
+        type: null,
+        contractInstance: null,
+        params: null
+      }
 
-      const WMATIC_TOKEN = new Token(
-        SupportedChainId.POLYGON,
-        WMATIC,
-        18,
-        "WMATIC",
-        "Wrapped Matic"
-      );
+      let secondExchangeInfo = {
+        type: null,
+        contractInstance: null,
+        params: null
+      }
 
-      const USDC_TOKEN = new Token(
-        SupportedChainId.POLYGON,
-        USDC,
-        6,
-        "USDC",
-        "USD//C"
-      );
-      // compute pool address
-      const config = {
-        tokens: {
-          in: USDC_TOKEN,
-          amountIn: BORROW_AMOUNT,
-          out: WETH_TOKEN,
-          poolFee: 3000,
-        },
-      };
 
-      const currentPoolAddress = computePoolAddress({
-        factoryAddress: _factory,
-        tokenA: config.tokens.in,
-        tokenB: config.tokens.out,
-        fee: config.tokens.poolFee,
-      });
+      // MAJOR - set up all contracts
+      // create signer
+      const [person] = await ethers.getSigners()
 
-      const provider = new ethers.providers.JsonRpcProvider(
-        "https://polygon-mainnet.g.alchemy.com/v2/N8cyw-7E92FP1U7--nwsBLZX4HOhz9Wl"
-      );
+      // uniswap router contract
+      const uniswapRouterContract = new ethers.Contract(_swapRouter, uniswapRouterAbi, provider)
+      // token contract
+      const baseTokenContract = new ethers.Contract(BASE_TOKEN_ADDRESS, abi, provider)
+      // sushiswap router contract
+      const sushiswapRouterContract = new ethers.Contract(_sushiSwapRouter, sushiAbi, provider)
 
-      const poolContract = new ethers.Contract(
-        currentPoolAddress,
-        IUniswapV3PoolABI.abi,
-        provider
-      );
-
-      // call tokens and fees
-      const [token0, token1, fee] = await Promise.all([
-        poolContract.token0(),
-        poolContract.token1(),
-        poolContract.fee(),
-      ]);
-
-      // create quoter contract instance
-      const quoterContractAddress =
-        "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6";
-      const quoterContract = new ethers.Contract(
-        quoterContractAddress,
-        Quoter.abi,
-        provider
-      );
-      const [person] = await ethers.getSigners();
-      const uniswapV3RouterContract = new ethers.Contract(
-        _swapRouter,
-        uniswapRouterAbi,
-        person
-      );
-
-      const sushiContract = new ethers.Contract(
-        _sushiSwapRouter,
-        sushiAbi,
-        provider
-      );
-
-      const tokenContract = new ethers.Contract(
-        BASE_TOKEN_ADDRESS,
-        abi,
-        person
-      );
-
-      await impersonateFundErc20(
-        tokenBase,
-        USDC_WHALE,
-        person.address,
-        initialFundingHuman,
-        DECIMALS
-      );
-      const YFI = "0xDA537104D6A5edd53c6fBba9A898708E465260b6";
-      const usdcBalance = await tokenContract.balanceOf(person.address);
-      console.log(
-        "usdc balance: ",
-        ethers.utils.formatUnits(usdcBalance, 6),
-        person.address
-      );
-
-      // get quotes
-      const quotedAmountOut =
-        await quoterContract.callStatic.quoteExactInputSingle(
-          USDC,
-          WETH,
-          fee,
-          ethers.utils.parseUnits("1", 6),
-          0
-        );
-
-      // calculate proper amounts out for ethereum
-      // 1USDC -> quotedAmount WETH
-      // 100,000USDC => xWETH
-      // x = 100,000USDC * quotedAmount
-
-      const supposedWethOut =
-        100000 * ethers.utils.formatUnits(quotedAmountOut, 18);
-      console.log("Expected Amount Out: ", supposedWethOut);
-
-      const quotedAmountOutWETHReal =
-        await quoterContract.callStatic.quoteExactInputSingle(
+      // add exchange contract
+      firstExchangeInfo.type = {
+        type: "uniswap",
+        contractInstance: uniswapRouterContract,
+        params: (
           USDC,
           WETH,
           fee,
           ethers.utils.parseUnits("100000", 6),
           0
-        );
+        )
+      }
 
-      console.log(
-        "Amount out from Exchange: ",
-        ethers.utils.formatUnits(quotedAmountOutWETHReal, 18)
-      );
 
-      await tokenContract.approve(
-        _swapRouter,
-        ethers.utils.parseUnits("100000", 6)
-      );
+      // MAJOR - check which exchange is profitable to  to buy from which to sell
+      // call checkProfitableBuyExchange()
+      const buyExchange = await checkProfitableBuyExchange()
 
-      // perform swap on uniswap
-      const realTradedAmount = await FLASHSWAPV3.exactInput({
-        tokenIn: USDC,
-        tokenOut: WETH,
-        fee: 3000,
-        recipient: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        deadline: Date.now() + 10000,
-        amountIn: ethers.utils.parseUnits("100000", 6),
-        amountOutMinimum: 0,
-        sqrtPriceLimitX96: 0,
-      });
+      // MAJOR - execute trade
+      //  call execute trade with swap type
 
-      const confirmationTx = await realTradedAmount.wait();
-
-      const realTradeAmount = await FLASHSWAPV3.getTransactionFinalPrice();
-
-      console.log(
-        "Amount from real trade: ",
-        ethers.utils.formatUnits(realTradeAmount, 18)
-      );
-
-      const quotedAmountOut2 =
-        await quoterContract.callStatic.quoteExactInputSingle(
-          WETH,
-          USDC,
-          fee,
-          quotedAmountOut,
-          0
-        );
-
-      const wethAmount = await sushiContract.getAmountsOut(
-        ethers.utils.parseUnits("10", 6),
-        [USDC, WETH]
-      );
-
-      const usdcAmount = await sushiContract.getAmountsOut(wethAmount[1], [
-        WETH,
-        USDC,
-      ]);
-
-      const params = {
-        token0: WMATIC,
-        token1: USDC,
-        arbToken1: USDC,
-        arbToken2: WETH,
-        fee1: 3000,
-        amount0: ethers.utils.parseUnits("0", 18),
-        amount1: BORROW_AMOUNT,
-        fee2: 3000,
-        fee3: 3000,
-        buyType: 0, // 1 buy uniswap
-      };
-      await FLASHSWAPV3.initFlashUniswap(params);
     }).timeout(10000000);
   });
 });
