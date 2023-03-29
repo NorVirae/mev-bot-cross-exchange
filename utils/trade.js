@@ -1,5 +1,60 @@
 const { ethers } = require("hardhat");
 
+// checks profitabilty after swap from first exchange
+async function checkProfitabilityCrossExchange(
+  initialTradeAmount,
+  tradeAmountOutFirstExchange,
+  toExchangeInfo
+) {
+  // use amounts out from profitable exchange and trade on second
+
+  if (toExchangeInfo.type == "uniswap") {
+    let tradeOutcome = {
+      profitable: false,
+      amountOut: ""
+    }
+    let returnAmount = await toExchangeInfo.callStatic.quoteExactInputSingle(
+      toExchangeInfo.params.to,
+      toExchangeInfo.params.from,
+      toExchangeInfo.params.fee,
+      ethers.utils.parseUnits(tradeAmountOutFirstExchange, 18),
+      0
+    );
+
+    tradeOutcome.amountOut = returnAmount
+
+    if (Number(ethers.utils.formatUnits(returnAmount, 6)) > (Number(initialTradeAmount) + ((initialTradeAmount * 3) / 997) + 1)){
+      tradeOutcome.profitable = true
+    }
+
+    return tradeOutcome
+  }
+
+  if (toExchangeInfo.type == "sushiswap"){
+    let tradeOutcome = {
+      profitable: false,
+      amountOut: ""
+    }
+    let returnAmount = await exchange.contractInstance.getAmountsOut(
+      ethers.utils.parseUnits(tradeAmountOutFirstExchange, 6),
+      [exchange.params.to, exchange.params.from]
+    );
+
+    tradeOutcome.amountOut = returnAmount[1]
+
+  // check outpute amount is greater than input trade amount + fee
+
+    if (Number(ethers.utils.formatUnits(returnAmount[1], 6)) > (Number(initialTradeAmount) + ((initialTradeAmount * 3) / 997) + 1)){
+      tradeOutcome.profitable = true
+    }
+
+    
+
+    return tradeOutcome
+  }
+
+}
+
 async function exchangeSelectorForSingularPriceOutput(exchange) {
   if (exchange.type == "uniswap") {
     let smallestAmountOut =
@@ -89,7 +144,7 @@ async function getMostProfitableExchangeByComparisonTraded(
   amountOutInfoFromSecondExchange,
   calculatedBuyExchange
 ) {
-  console.log(calculatedBuyExchange, "Exchange Buy calculated")
+  console.log(calculatedBuyExchange, "Exchange Buy calculated");
   let buyfromExchange = "";
   if (
     amountOutInfoFromFirstExchange.amount >
@@ -97,7 +152,7 @@ async function getMostProfitableExchangeByComparisonTraded(
     calculatedBuyExchange == amountOutInfoFromFirstExchange.exchangeType
   ) {
     buyfromExchange = amountOutInfoFromFirstExchange.type;
-  console.log(buyfromExchange, "Exchange Buy Traded")
+    console.log(buyfromExchange, "Exchange Buy Traded");
 
     return {
       type: buyfromExchange,
@@ -105,7 +160,7 @@ async function getMostProfitableExchangeByComparisonTraded(
     };
   } else if (
     amountOutInfoFromSecondExchange.amount >
-    amountOutInfoFromFirstExchange.amount &&
+      amountOutInfoFromFirstExchange.amount &&
     calculatedBuyExchange == amountOutInfoFromSecondExchange.exchangeType
   ) {
     buyfromExchange = amountOutInfoFromSecondExchange.type;
@@ -252,6 +307,10 @@ async function checkProfitableBuyExchange(
       maximumAmountOutForFirstExTraded
     );
 
+    // write a function to check trade profitability
+    let probableTradeReport = await checkProfitabilityCrossExchange(maximumAmountOutForFirstExTraded, secondExchangeInfo, tradeAmount);
+
+    console.log(probableTradeReport, "TRADE REPORT PROBABLE UNISWAP")
     let amountOutReversed1 =
       await exchangeSelectorForConclusiveAmountsOutReversed(
         secondExchangeInfo,
@@ -265,22 +324,19 @@ async function checkProfitableBuyExchange(
     // x = maxiEth
     // x = maxiEth / small eth
 
-
-
     // highly traded dexes on polygon
     // uniswapv3, Quickswap(V3), Kyberswap Elastic, DODO
 
     console.log(
       " supposed calculated amounts out: ",
-      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx 
+      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx
     );
 
     console.log(
       " supposed calculated amounts out: ",
       maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx
     );
-    console.log("GOT HERE!")
-
+    console.log("GOT HERE!");
   } else {
     console.log("SUSHI WTH SLIPPAGE");
 
@@ -288,6 +344,11 @@ async function checkProfitableBuyExchange(
       maximumAmountOutForSecondEx,
       maximumAmountOutForSecondExTraded
     );
+
+    // write a function to check trade profitability
+    let probableTradeReport = await checkProfitabilityCrossExchange(maximumAmountOutForSecondExTraded, firstExchangeInfo, tradeAmount);
+
+    console.log(probableTradeReport, "TRADE REPORT PROBABLE SUSHI")
 
     let amountOutReversed2 =
       await exchangeSelectorForConclusiveAmountsOutReversed(
@@ -303,7 +364,7 @@ async function checkProfitableBuyExchange(
     );
     console.log(
       " supposed calculated amounts out: ",
-      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx 
+      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx
     );
   }
 
