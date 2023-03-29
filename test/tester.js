@@ -27,6 +27,7 @@ describe("FlashSwap Contract", () => {
     _factory = "0x1F98431c8aD98523631AE4a59f267346ea31F984",
     _WETH9 = "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
     _sushiSwapRouter = "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506",
+    _quoterAddress = "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6",
     txArbitrage;
 
   const DECIMALS = 6;
@@ -46,6 +47,9 @@ describe("FlashSwap Contract", () => {
   const BASE_TOKEN_ADDRESS = USDC;
 
   const tokenBase = new ethers.Contract(BASE_TOKEN_ADDRESS, abi, provider);
+
+  // exchanges to integrate
+  // balancer_v1, uniswap_v2, uniswap_v3, curve, 0x, bancor, quickswap
 
   beforeEach(async () => {
     // Get owner as signer
@@ -124,28 +128,48 @@ describe("FlashSwap Contract", () => {
 
       // uniswap router contract
       const uniswapRouterContract = new ethers.Contract(_swapRouter, uniswapRouterAbi, provider)
+
+      // quoter contract
+      const uniswapQuoterContract = new ethers.Contract(_quoterAddress, Quoter.abi, provider)
+
       // token contract
       const baseTokenContract = new ethers.Contract(BASE_TOKEN_ADDRESS, abi, provider)
       // sushiswap router contract
       const sushiswapRouterContract = new ethers.Contract(_sushiSwapRouter, sushiAbi, provider)
 
+
+
       // add exchange contract
-      firstExchangeInfo.type = {
+      firstExchangeInfo = {
         type: "uniswap",
-        contractInstance: uniswapRouterContract,
-        params: (
-          USDC,
-          WETH,
-          fee,
-          ethers.utils.parseUnits("100000", 6),
-          0
-        )
+        contractInstance: uniswapQuoterContract,
+        params: {
+          from: USDC,
+          to: WETH,
+          fee: 3000,
+          amount: "10000",
+          sqrtPrice: 0
+        }
+      }
+
+
+      secondExchangeInfo = {
+        type: "sushiswap",
+        contractInstance: sushiswapRouterContract,
+        params: {
+          from: USDC,
+          to: WETH,
+          fee: 3000,
+          amount: "10000",
+          sqrtPrice: 0
+        }
       }
 
 
       // MAJOR - check which exchange is profitable to  to buy from which to sell
       // call checkProfitableBuyExchange()
-      const buyExchange = await checkProfitableBuyExchange()
+      const buyExchange = await checkProfitableBuyExchange(firstExchangeInfo, secondExchangeInfo, "10000", 3000)
+      console.log(buyExchange, "HULI")
 
       // MAJOR - execute trade
       //  call execute trade with swap type
