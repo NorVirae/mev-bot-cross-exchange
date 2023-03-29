@@ -265,15 +265,21 @@ async function checkProfitableBuyExchange(
     // x = maxiEth
     // x = maxiEth / small eth
 
+
+
+    // highly traded dexes on polygon
+    // uniswapv3, Quickswap(V3), Kyberswap Elastic, DODO
+
     console.log(
       " supposed calculated amounts out: ",
-      maximumAmountOutForFirstExTraded / smallAmountOutForOneQuantityFirstEx
+      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx 
     );
 
     console.log(
       " supposed calculated amounts out: ",
-      maximumAmountOutForSecondExTraded / smallAmountOutForOneQuantitySecondEx
+      maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx
     );
+    console.log("GOT HERE!")
 
   } else {
     console.log("SUSHI WTH SLIPPAGE");
@@ -293,11 +299,11 @@ async function checkProfitableBuyExchange(
 
     console.log(
       " supposed calculated amounts out: ",
-      maximumAmountOutForSecondExTraded / smallAmountOutForOneQuantitySecondEx
+      maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx
     );
     console.log(
       " supposed calculated amounts out: ",
-      maximumAmountOutForFirstExTraded / smallAmountOutForOneQuantityFirstEx
+      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx 
     );
   }
 
