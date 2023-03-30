@@ -7,13 +7,15 @@ async function checkProfitabilityCrossExchange(
   toExchangeInfo
 ) {
   // use amounts out from profitable exchange and trade on second
-
+  
+  
   if (toExchangeInfo.type == "uniswap") {
     let tradeOutcome = {
       profitable: false,
-      amountOut: ""
+      amountOut: "",
+      type:""
     }
-    let returnAmount = await toExchangeInfo.callStatic.quoteExactInputSingle(
+    let returnAmount = await toExchangeInfo.contractInstance.callStatic.quoteExactInputSingle(
       toExchangeInfo.params.to,
       toExchangeInfo.params.from,
       toExchangeInfo.params.fee,
@@ -22,6 +24,8 @@ async function checkProfitabilityCrossExchange(
     );
 
     tradeOutcome.amountOut = returnAmount
+    tradeOutcome.type = toExchangeInfo.type
+
 
     if (Number(ethers.utils.formatUnits(returnAmount, 6)) > (Number(initialTradeAmount) + ((initialTradeAmount * 3) / 997) + 1)){
       tradeOutcome.profitable = true
@@ -41,6 +45,8 @@ async function checkProfitabilityCrossExchange(
     );
 
     tradeOutcome.amountOut = returnAmount[1]
+    tradeOutcome.type = toExchangeInfo.type
+
 
   // check outpute amount is greater than input trade amount + fee
 
@@ -300,6 +306,7 @@ async function checkProfitableBuyExchange(
 
   // === MAJOR TASK === 9 get the percentage and amounts lost due to slippage
   let slippageInfo;
+  let probableTradeReport;
   if (buyExchangeInProspect.type == firstExchangeInfo.type) {
     console.log("UNI WTH SLIPPAGE");
     slippageInfo = slippageAmountCalculator(
@@ -308,7 +315,7 @@ async function checkProfitableBuyExchange(
     );
 
     // write a function to check trade profitability
-    let probableTradeReport = await checkProfitabilityCrossExchange(maximumAmountOutForFirstExTraded, secondExchangeInfo, tradeAmount);
+    probableTradeReport = await checkProfitabilityCrossExchange(tradeAmount , maximumAmountOutForFirstExTraded ,  secondExchangeInfo);
 
     console.log(probableTradeReport, "TRADE REPORT PROBABLE UNISWAP")
     let amountOutReversed1 =
@@ -346,7 +353,7 @@ async function checkProfitableBuyExchange(
     );
 
     // write a function to check trade profitability
-    let probableTradeReport = await checkProfitabilityCrossExchange(maximumAmountOutForSecondExTraded, firstExchangeInfo, tradeAmount);
+    probableTradeReport = await checkProfitabilityCrossExchange(tradeAmount, maximumAmountOutForSecondExTraded, firstExchangeInfo, );
 
     console.log(probableTradeReport, "TRADE REPORT PROBABLE SUSHI")
 
@@ -355,6 +362,7 @@ async function checkProfitableBuyExchange(
         firstExchangeInfo,
         ethers.utils.parseUnits(maximumAmountOutForSecondExTraded, 18)
       );
+      console.log("HOLA")
 
     console.log("amount out from uni after sushi buy: ", amountOutReversed2);
 
@@ -368,6 +376,8 @@ async function checkProfitableBuyExchange(
     );
   }
 
+  console.log("SHOULD PASS")
+
   // === MAJOR TASK === 10 compare the amounts out from 8 plus slippage, check if amount is greater than initial investment plus fee goto log 2 else go to log 4
   if (buyExchangeInProspect.amountsOut > tradeAmount + fee) {
     console.log("exchange is profitable with slippage applied");
@@ -377,10 +387,12 @@ async function checkProfitableBuyExchange(
     return;
   }
 
+
+  console.log(tradeAmount, "TRADE AMOUNT")
   // === MAJOR TASK === 11 compare the amounts out from 8 minus slippage, check if amount is greater than initial investment plus fee goto log 3 else got to log 5
   if (
     buyExchangeInProspect.amountsOut + (await slippageInfo).slipAmount >
-    tradeAmount + fee
+    Number(tradeAmount) + fee
   ) {
     console.log("exchange is profitable with slippage removed");
     buyExchange = buyExchangeInProspect.type;
@@ -388,10 +400,20 @@ async function checkProfitableBuyExchange(
     console.log("exchange is not profitable with slippage removed");
     return;
   }
+
+  console.log("HUZARON")
+  probableTradeReport.type = buyExchange
+  console.log(probableTradeReport, "CHECK^^^^^^^^^^")
   // === MAJOR TASK === 12 if 10 is profitable return that exchange as the buy exchange and second exchange as the sell exchange
-  return buyExchange;
+  return probableTradeReport;
+}
+
+const executeTrade = (tradeReport) => {
+
+  return "trade executed"
 }
 
 module.exports = {
   checkProfitableBuyExchange,
+  executeTrade
 };

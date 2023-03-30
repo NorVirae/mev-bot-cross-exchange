@@ -13,7 +13,7 @@ const {
 } = require("../artifacts/contracts/interfaces/IERC20.sol/IERC20.json");
 const IUniswapV3PoolABI = require("@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json");
 const Quoter = require("@uniswap/v3-periphery/artifacts/contracts/lens/Quoter.sol/Quoter.json");
-const { checkProfitableBuyExchange } = require("../utils/trade");
+const { checkProfitableBuyExchange, executeTrade } = require("../utils/trade");
 
 const provider = waffle.provider;
 
@@ -168,8 +168,9 @@ describe("FlashSwap Contract", () => {
 
       // MAJOR - check which exchange is profitable to  to buy from which to sell
       // call checkProfitableBuyExchange()
-      const buyExchange = await checkProfitableBuyExchange(firstExchangeInfo, secondExchangeInfo, "10000", 3000)
-      console.log(buyExchange, "HULI")
+      const tradeProfitabilityReport = await checkProfitableBuyExchange(firstExchangeInfo, secondExchangeInfo, "10000", 3000)
+      await executeTrade(tradeProfitabilityReport, firstExchangeInfo, secondExchangeInfo)
+      console.log(tradeProfitabilityReport, "HULI")
 
       // MAJOR - execute trade
       //  call execute trade with swap type
