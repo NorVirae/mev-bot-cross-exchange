@@ -166,10 +166,32 @@ describe("FlashSwap Contract", () => {
       }
 
 
+
       // MAJOR - check which exchange is profitable to  to buy from which to sell
+      let params = {
+        token0: WMATIC,
+        token1: USDC,
+        arbToken1: USDC,
+        arbToken2: WETH,
+        fee1: 3000,
+        amount0: ethers.utils.parseUnits("0", 18),
+        amount1: ethers.utils.parseUnits("10000", 6),
+        fee2: 3000,
+        fee3: 3000,
+        buyType: 0, // 1 buy uniswap
+      };
+
+      
       // call checkProfitableBuyExchange()
       const tradeProfitabilityReport = await checkProfitableBuyExchange(firstExchangeInfo, secondExchangeInfo, "10000", 3000)
-      await executeTrade(tradeProfitabilityReport, firstExchangeInfo, secondExchangeInfo)
+      if (tradeProfitabilityReport.type == "uniswap"){
+        params.buyType = 1
+      }
+
+      if (tradeProfitabilityReport.type == "sushiswap"){
+        params.buyType = 0
+      }
+      await executeTrade(tradeProfitabilityReport, FLASHSWAPV3, params)
       console.log(tradeProfitabilityReport, "HULI")
 
       // MAJOR - execute trade

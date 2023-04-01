@@ -7,58 +7,59 @@ async function checkProfitabilityCrossExchange(
   toExchangeInfo
 ) {
   // use amounts out from profitable exchange and trade on second
-  
-  
+
   if (toExchangeInfo.type == "uniswap") {
     let tradeOutcome = {
       profitable: false,
       amountOut: "",
-      type:""
+      type: "",
+    };
+    let returnAmount =
+      await toExchangeInfo.contractInstance.callStatic.quoteExactInputSingle(
+        toExchangeInfo.params.to,
+        toExchangeInfo.params.from,
+        toExchangeInfo.params.fee,
+        ethers.utils.parseUnits(tradeAmountOutFirstExchange, 18),
+        0
+      );
+
+    tradeOutcome.amountOut = returnAmount;
+    tradeOutcome.type = toExchangeInfo.type;
+
+    if (
+      Number(ethers.utils.formatUnits(returnAmount, 6)) >
+      Number(initialTradeAmount) + (initialTradeAmount * 3) / 997 + 1
+    ) {
+      tradeOutcome.profitable = true;
     }
-    let returnAmount = await toExchangeInfo.contractInstance.callStatic.quoteExactInputSingle(
-      toExchangeInfo.params.to,
-      toExchangeInfo.params.from,
-      toExchangeInfo.params.fee,
-      ethers.utils.parseUnits(tradeAmountOutFirstExchange, 18),
-      0
-    );
 
-    tradeOutcome.amountOut = returnAmount
-    tradeOutcome.type = toExchangeInfo.type
-
-
-    if (Number(ethers.utils.formatUnits(returnAmount, 6)) > (Number(initialTradeAmount) + ((initialTradeAmount * 3) / 997) + 1)){
-      tradeOutcome.profitable = true
-    }
-
-    return tradeOutcome
+    return tradeOutcome;
   }
 
-  if (toExchangeInfo.type == "sushiswap"){
+  if (toExchangeInfo.type == "sushiswap") {
     let tradeOutcome = {
       profitable: false,
-      amountOut: ""
-    }
+      amountOut: "",
+    };
     let returnAmount = await exchange.contractInstance.getAmountsOut(
       ethers.utils.parseUnits(tradeAmountOutFirstExchange, 6),
       [exchange.params.to, exchange.params.from]
     );
 
-    tradeOutcome.amountOut = returnAmount[1]
-    tradeOutcome.type = toExchangeInfo.type
+    tradeOutcome.amountOut = returnAmount[1];
+    tradeOutcome.type = toExchangeInfo.type;
 
+    // check outpute amount is greater than input trade amount + fee
 
-  // check outpute amount is greater than input trade amount + fee
-
-    if (Number(ethers.utils.formatUnits(returnAmount[1], 6)) > (Number(initialTradeAmount) + ((initialTradeAmount * 3) / 997) + 1)){
-      tradeOutcome.profitable = true
+    if (
+      Number(ethers.utils.formatUnits(returnAmount[1], 6)) >
+      Number(initialTradeAmount) + (initialTradeAmount * 3) / 997 + 1
+    ) {
+      tradeOutcome.profitable = true;
     }
 
-    
-
-    return tradeOutcome
+    return tradeOutcome;
   }
-
 }
 
 async function exchangeSelectorForSingularPriceOutput(exchange) {
@@ -199,6 +200,137 @@ async function slippageAmountCalculator(firstAmount, secondAmount) {
   };
 }
 
+// compare amounts out with slippage
+function compareAmountsOutWithSlipage(buyExchangeInProspect, tradeAmount, fee) {
+  let buyExchange;
+  if (buyExchangeInProspect.amountsOut > tradeAmount + fee) {
+    console.log("exchange is profitable with slippage applied");
+    return (buyExchange = buyExchangeInProspect.type);
+  } else {
+    console.log("exchange is not profitable with slippage applied");
+    return;
+  }
+}
+
+// get slippage percentage and amount
+
+async function fetchSlippagePercentageAndAmount(
+  buyExchangeInProspect,
+  firstExchangeInfo,
+  maximumAmountOutForFirstEx,
+  maximumAmountOutForFirstExTraded,
+  secondExchangeInfo,
+  maximumAmountOutForSecondEx,
+  smallAmountOutForOneQuantityFirstEx,
+  smallAmountOutForOneQuantitySecondEx,
+  maximumAmountOutForSecondExTraded,
+  tradeAmount
+) {
+  let probableTradeReport;
+  if (buyExchangeInProspect.type == firstExchangeInfo.type) {
+    console.log("UNI WTH SLIPPAGE");
+    slippageInfo = slippageAmountCalculator(
+      maximumAmountOutForFirstEx,
+      maximumAmountOutForFirstExTraded
+    );
+
+    // write a function to check trade profitability
+    probableTradeReport = await checkProfitabilityCrossExchange(
+      tradeAmount,
+      maximumAmountOutForFirstExTraded,
+      secondExchangeInfo
+    );
+
+    console.log(probableTradeReport, "TRADE REPORT PROBABLE UNISWAP");
+    let amountOutReversed1 =
+      await exchangeSelectorForConclusiveAmountsOutReversed(
+        secondExchangeInfo,
+        ethers.utils.parseUnits(maximumAmountOutForFirstExTraded, 18)
+      );
+
+    console.log("amount out from sushi after uni buy: ", amountOutReversed1);
+
+    // Model for calculatively converting eth to usdc
+    // 1usdc = small eth
+    // x = maxiEth
+    // x = maxiEth / small eth
+
+    // highly traded dexes on polygon
+    // uniswapv3, Quickswap(V3), Kyberswap Elastic, DODO
+
+    console.log(
+      " supposed calculated amounts out: ",
+      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx
+    );
+
+    console.log(
+      " supposed calculated amounts out: ",
+      maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx
+    );
+    console.log("GOT HERE!");
+  } else {
+    console.log("SUSHI WTH SLIPPAGE");
+
+    slippageInfo = await slippageAmountCalculator(
+      maximumAmountOutForSecondEx,
+      maximumAmountOutForSecondExTraded
+    );
+
+    // write a function to check trade profitability
+    probableTradeReport = await checkProfitabilityCrossExchange(
+      tradeAmount,
+      maximumAmountOutForSecondExTraded,
+      firstExchangeInfo
+    );
+
+    console.log(probableTradeReport, "TRADE REPORT PROBABLE SUSHI");
+
+    let amountOutReversed2 =
+      await exchangeSelectorForConclusiveAmountsOutReversed(
+        firstExchangeInfo,
+        ethers.utils.parseUnits(maximumAmountOutForSecondExTraded, 18)
+      );
+    console.log("HOLA");
+
+    console.log("amount out from uni after sushi buy: ", amountOutReversed2);
+
+    console.log(
+      " supposed calculated amounts out: ",
+      maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx
+    );
+    console.log(
+      " supposed calculated amounts out: ",
+      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx
+    );
+  }
+
+  return probableTradeReport;
+}
+
+// compare amounts without slippage
+
+async function compareAmountsWithoutSlippage(
+  buyExchangeInProspect,
+  tradeAmount,
+  slippageInfo,
+  fee
+) {
+  if (
+    buyExchangeInProspect.amountsOut + slippageInfo.slipAmount >
+    Number(tradeAmount) + fee
+  ) {
+    console.log("exchange is profitable with slippage removed");
+    buyExchange = buyExchangeInProspect.type;
+  } else {
+    console.log("exchange is not profitable with slippage removed");
+    return;
+  }
+
+  console.log("HUZARON");
+  probableTradeReport.type = buyExchange;
+  console.log(probableTradeReport, "CHECK^^^^^^^^^^");
+}
+
 // function to check profitability
 async function checkProfitableBuyExchange(
   firstExchangeInfo,
@@ -305,115 +437,53 @@ async function checkProfitableBuyExchange(
   }
 
   // === MAJOR TASK === 9 get the percentage and amounts lost due to slippage
-  let slippageInfo;
-  let probableTradeReport;
-  if (buyExchangeInProspect.type == firstExchangeInfo.type) {
-    console.log("UNI WTH SLIPPAGE");
-    slippageInfo = slippageAmountCalculator(
-      maximumAmountOutForFirstEx,
-      maximumAmountOutForFirstExTraded
-    );
-
-    // write a function to check trade profitability
-    probableTradeReport = await checkProfitabilityCrossExchange(tradeAmount , maximumAmountOutForFirstExTraded ,  secondExchangeInfo);
-
-    console.log(probableTradeReport, "TRADE REPORT PROBABLE UNISWAP")
-    let amountOutReversed1 =
-      await exchangeSelectorForConclusiveAmountsOutReversed(
-        secondExchangeInfo,
-        ethers.utils.parseUnits(maximumAmountOutForFirstExTraded, 18)
-      );
-
-    console.log("amount out from sushi after uni buy: ", amountOutReversed1);
-
-    // Model for calculatively converting eth to usdc
-    // 1usdc = small eth
-    // x = maxiEth
-    // x = maxiEth / small eth
-
-    // highly traded dexes on polygon
-    // uniswapv3, Quickswap(V3), Kyberswap Elastic, DODO
-
-    console.log(
-      " supposed calculated amounts out: ",
-      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx
-    );
-
-    console.log(
-      " supposed calculated amounts out: ",
-      maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx
-    );
-    console.log("GOT HERE!");
-  } else {
-    console.log("SUSHI WTH SLIPPAGE");
-
-    slippageInfo = slippageAmountCalculator(
-      maximumAmountOutForSecondEx,
-      maximumAmountOutForSecondExTraded
-    );
-
-    // write a function to check trade profitability
-    probableTradeReport = await checkProfitabilityCrossExchange(tradeAmount, maximumAmountOutForSecondExTraded, firstExchangeInfo, );
-
-    console.log(probableTradeReport, "TRADE REPORT PROBABLE SUSHI")
-
-    let amountOutReversed2 =
-      await exchangeSelectorForConclusiveAmountsOutReversed(
-        firstExchangeInfo,
-        ethers.utils.parseUnits(maximumAmountOutForSecondExTraded, 18)
-      );
-      console.log("HOLA")
-
-    console.log("amount out from uni after sushi buy: ", amountOutReversed2);
-
-    console.log(
-      " supposed calculated amounts out: ",
-      maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx
-    );
-    console.log(
-      " supposed calculated amounts out: ",
-      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx
-    );
-  }
-
-  console.log("SHOULD PASS")
+  probableTradeReport = await fetchSlippagePercentageAndAmount(
+    buyExchangeInProspect,
+    firstExchangeInfo,
+    maximumAmountOutForFirstEx,
+    maximumAmountOutForFirstExTraded,
+    secondExchangeInfo,
+    maximumAmountOutForSecondEx,
+    smallAmountOutForOneQuantityFirstEx,
+    smallAmountOutForOneQuantitySecondEx,
+    maximumAmountOutForSecondExTraded
+  );
 
   // === MAJOR TASK === 10 compare the amounts out from 8 plus slippage, check if amount is greater than initial investment plus fee goto log 2 else go to log 4
-  if (buyExchangeInProspect.amountsOut > tradeAmount + fee) {
-    console.log("exchange is profitable with slippage applied");
-    buyExchange = buyExchangeInProspect.type;
-  } else {
-    console.log("exchange is not profitable with slippage applied");
-    return;
-  }
 
+  buyExchange = await compareAmountsOutWithSlipage(
+    buyExchangeInProspect,
+    tradeAmount,
+    fee
+  );
 
-  console.log(tradeAmount, "TRADE AMOUNT")
+  console.log(tradeAmount, "TRADE AMOUNT");
   // === MAJOR TASK === 11 compare the amounts out from 8 minus slippage, check if amount is greater than initial investment plus fee goto log 3 else got to log 5
-  if (
-    buyExchangeInProspect.amountsOut + (await slippageInfo).slipAmount >
-    Number(tradeAmount) + fee
-  ) {
-    console.log("exchange is profitable with slippage removed");
-    buyExchange = buyExchangeInProspect.type;
-  } else {
-    console.log("exchange is not profitable with slippage removed");
-    return;
-  }
-
-  console.log("HUZARON")
-  probableTradeReport.type = buyExchange
-  console.log(probableTradeReport, "CHECK^^^^^^^^^^")
+  await compareAmountsWithoutSlippage(
+    buyExchangeInProspect,
+    tradeAmount,
+    slippageInfo,
+    fee
+  );
   // === MAJOR TASK === 12 if 10 is profitable return that exchange as the buy exchange and second exchange as the sell exchange
   return probableTradeReport;
 }
 
-const executeTrade = (tradeReport) => {
-
-  return "trade executed"
-}
+const executeTrade = async (
+  tradeReport,
+  crossFlashContract,
+  params
+) => {
+  
+  if (tradeReport.profitable) {
+    await crossFlashContract.initFlashUniswap(params);
+  }
+  else{
+    console.log("couldn't execute trade is not profitable!")
+  }
+};
 
 module.exports = {
   checkProfitableBuyExchange,
-  executeTrade
+  executeTrade,
 };
