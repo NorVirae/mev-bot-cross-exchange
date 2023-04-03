@@ -234,7 +234,7 @@ async function fetchSlippagePercentageAndAmount(
       maximumAmountOutForFirstExTraded
     );
 
-    // write a function to check trade profitability
+    // write a function to check trade profitability accross exchange
     probableTradeReport = await checkProfitabilityCrossExchange(
       tradeAmount,
       maximumAmountOutForFirstExTraded,
@@ -331,6 +331,7 @@ async function compareAmountsWithoutSlippage(
   console.log(probableTradeReport, "CHECK^^^^^^^^^^");
 }
 
+// PSSS check Trade Report
 // function to check profitability
 async function checkProfitableBuyExchange(
   firstExchangeInfo,
