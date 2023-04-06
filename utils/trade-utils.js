@@ -1,7 +1,33 @@
 const { ethers } = require("hardhat");
 
+// get return amount on sell exchange
+export async function fetchReverseSellResult(
+  buyExchange,
+  firstExchangeInfo,
+  maximumAmountOutForFirstEx,
+  smallAmountOutForOneQuantityFirstEx,
+  maximumAmountOutForSecondEx,
+  smallAmountOutForOneQuantitySecondEx
+
+) {
+  let returnAmountInfo;
+  if (buyExchange == firstExchangeInfo.type) {
+    returnAmountInfo.amountOut =
+      maximumAmountOutForFirstEx / smallAmountOutForOneQuantitySecondEx;
+    returnAmountInfo.exchangeType = firstExchangeInfo.type;
+  }
+
+  if (buyExchange == secondExchangeInfo.type) {
+    returnAmountInfo.amountOut =
+      maximumAmountOutForSecondEx / smallAmountOutForOneQuantityFirstEx;
+    returnAmountInfo.exchangeType = secondExchangeInfo.type;
+  }
+
+  return returnAmountInfo;
+}
+
 // checks profitabilty after swap from first exchange
-async function checkProfitabilityCrossExchange(
+export async function checkProfitabilityCrossExchange(
   initialTradeAmount,
   tradeAmountOutFirstExchange,
   toExchangeInfo
@@ -62,7 +88,7 @@ async function checkProfitabilityCrossExchange(
   }
 }
 
-async function exchangeSelectorForSingularPriceOutput(exchange) {
+export async function exchangeSelectorForSingularPriceOutput(exchange) {
   if (exchange.type == "uniswap") {
     let smallestAmountOut =
       await exchange.contractInstance.callStatic.quoteExactInputSingle(
@@ -86,7 +112,7 @@ async function exchangeSelectorForSingularPriceOutput(exchange) {
   }
 }
 
-async function exchangeSelectorForConclusiveAmountsOut(exchange) {
+export async function exchangeSelectorForConclusiveAmountsOut(exchange) {
   if (exchange.type == "uniswap") {
     let amountsOut =
       await exchange.contractInstance.callStatic.quoteExactInputSingle(
@@ -109,7 +135,7 @@ async function exchangeSelectorForConclusiveAmountsOut(exchange) {
   }
 }
 
-async function exchangeSelectorForConclusiveAmountsOutReversed(
+export async function exchangeSelectorForConclusiveAmountsOutReversed(
   exchange,
   amount
 ) {
@@ -135,7 +161,7 @@ async function exchangeSelectorForConclusiveAmountsOutReversed(
   }
 }
 
-async function getMostProfitableExchangeByComparison(
+export async function getMostProfitableExchangeByComparison(
   amountInfoFromFirstEx,
   amountInfoFromSecondEx
 ) {
@@ -146,7 +172,7 @@ async function getMostProfitableExchangeByComparison(
   return amountInfoFromSecondEx.exchangeType;
 }
 
-async function getMostProfitableExchangeByComparisonTraded(
+export async function getMostProfitableExchangeByComparisonTraded(
   amountOutInfoFromFirstExchange,
   amountOutInfoFromSecondExchange,
   calculatedBuyExchange
@@ -183,7 +209,7 @@ async function getMostProfitableExchangeByComparisonTraded(
   }
 }
 
-async function slippageAmountCalculator(firstAmount, secondAmount) {
+export async function slippageAmountCalculator(firstAmount, secondAmount) {
   let slipPercent = 0;
   let slipAmount = 0;
 
@@ -201,7 +227,11 @@ async function slippageAmountCalculator(firstAmount, secondAmount) {
 }
 
 // compare amounts out with slippage
-function compareAmountsOutWithSlipage(buyExchangeInProspect, tradeAmount, fee) {
+export function compareAmountsOutWithSlipage(
+  buyExchangeInProspect,
+  tradeAmount,
+  fee
+) {
   let buyExchange;
   if (buyExchangeInProspect.amountsOut > tradeAmount + fee) {
     console.log("exchange is profitable with slippage applied");
@@ -214,7 +244,7 @@ function compareAmountsOutWithSlipage(buyExchangeInProspect, tradeAmount, fee) {
 
 // get slippage percentage and amount
 
-async function fetchSlippagePercentageAndAmount(
+export async function fetchSlippagePercentageAndAmount(
   buyExchangeInProspect,
   firstExchangeInfo,
   maximumAmountOutForFirstEx,
@@ -309,7 +339,7 @@ async function fetchSlippagePercentageAndAmount(
 
 // compare amounts without slippage
 
-async function compareAmountsWithoutSlippage(
+export async function compareAmountsWithoutSlippage(
   buyExchangeInProspect,
   tradeAmount,
   slippageInfo,
@@ -470,17 +500,11 @@ async function checkProfitableBuyExchange(
   return probableTradeReport;
 }
 
-const executeTrade = async (
-  tradeReport,
-  crossFlashContract,
-  params
-) => {
-  
+const executeTrade = async (tradeReport, crossFlashContract, params) => {
   if (tradeReport.profitable) {
     await crossFlashContract.initFlashUniswap(params);
-  }
-  else{
-    console.log("couldn't execute trade is not profitable!")
+  } else {
+    console.log("couldn't execute trade is not profitable!");
   }
 };
 
