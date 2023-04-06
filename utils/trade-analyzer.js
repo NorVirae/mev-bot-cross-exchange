@@ -2,11 +2,13 @@ const {
   exchangeSelectorForSingularPriceOutput,
   getMostProfitableExchangeByComparison,
   fetchReverseSellResult,
+  exchangeSelectorForConclusiveAmountsOutReversed,
 } = require("./trade-utils");
 
 async function simulateTradeWithSlippage(
   firstExchangeInfo,
-  secondExchangeInfo
+  secondExchangeInfo,
+  tradeAmount
 ) {
   let tradeReport = {
     buyExchange: "",
@@ -58,8 +60,8 @@ async function simulateTradeWithSlippage(
 
   sellExchange =
     buyExchange === firstExchangeInfo.type
-      ? firstExchangeInfo.type
-      : secondExchangeInfo.type;
+      ? secondExchangeInfo.type
+      : firstExchangeInfo.type;
 
   // check profitability by determining reverse amount from sell exchange rate
   let returnAmountInfo = { amountOut: 0, exchangeType: "" };
@@ -84,14 +86,15 @@ async function simulateTradeWithSlippage(
       buyExchange === firstExchangeInfo.type
         ? maximumAmountOutForFirstEx
         : maximumAmountOutForSecondEx,
-    fromAmountAfterSell:
-      sellExchange === firstExchangeInfo.type
-        ? maximumAmountOutForFirstEx
-        : maximumAmountOutForSecondEx,
+    fromAmountAfterSell: returnAmountInfo.amountOut,
   });
 }
 
-async function simulateTradeWithoutSlippage() {
+async function simulateTradeWithoutSlippage(
+  firstExchangeInfo,
+  secondExchangeInfo,
+  tradeAmount
+) {
   // vars
   let buyExchange;
   let sellExchange;
@@ -108,9 +111,32 @@ async function simulateTradeWithoutSlippage() {
       ? firstExchangeInfo.type
       : secondExchangeInfo.type;
 
-    sellExchange = buyExchange == firstExchangeInfo.type? secondExchangeInfo.type: firstExchangeInfo.type
+  sellExchange =
+    buyExchange == firstExchangeInfo.type
+      ? secondExchangeInfo.type
+      : firstExchangeInfo.type;
   // now set amount out into sell exchange
+  let amountOutReversed = await exchangeSelectorForConclusiveAmountsOutReversed(
+    sellExchange == firstExchangeInfo.type
+      ? maximumAmountOutForFirstExTraded
+      : maximumAmountOutForSecondExTraded
+  );
   // check if amount out is greater than trade amount
   // is profitable if amount out is greater than trade amount + fee
+  let isProfitable =
+    Number(amountOutReversed) >
+    Number(tradeAmount) + ((tradeAmount * 3) / 997 + 1);
+
   // return buy Exchange, sell exchange, profitability, trademount, to amount after buy, from amount after sell.
+  let tradeReport = {
+    buyExchange,
+    sellExchange,
+    isProfitable,
+    tradeAmount,
+    toAmountAfterBuy:
+      buyExchange == firstExchangeInfo.type
+        ? maximumAmountOutForFirstExTraded
+        : maximumAmountOutForSecondExTraded,
+    fromAmountAfterSell: amountOutReversed,
+  };
 }
