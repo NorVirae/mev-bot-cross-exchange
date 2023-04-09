@@ -139,4 +139,12 @@ async function simulateTradeWithoutSlippage(
         : maximumAmountOutForSecondExTraded,
     fromAmountAfterSell: amountOutReversed,
   };
+
+  return tradeReport;
+}
+
+
+module.exports = {
+  simulateTradeWithSlippage,
+  simulateTradeWithoutSlippage
 }

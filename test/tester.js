@@ -13,7 +13,8 @@ const {
 } = require("../artifacts/contracts/interfaces/IERC20.sol/IERC20.json");
 const IUniswapV3PoolABI = require("@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json");
 const Quoter = require("@uniswap/v3-periphery/artifacts/contracts/lens/Quoter.sol/Quoter.json");
-const { checkProfitableBuyExchange, executeTrade } = require("../utils/trade");
+const { simulateTradeWithoutSlippage } = require("../utils/trade-analyzer");
+const { executeTrade } = require("../utils/trade-executor");
 
 const provider = waffle.provider;
 
@@ -184,7 +185,10 @@ describe("FlashSwap Contract", () => {
 
       
       // call checkProfitableBuyExchange()
-      const tradeProfitabilityReport = await checkProfitableBuyExchange(firstExchangeInfo, secondExchangeInfo, "10000", 3000)
+      // const tradeProfitabilityReport = await checkProfitableBuyExchange(firstExchangeInfo, secondExchangeInfo, "10000", 3000)
+      const tradeReport1 = simulateTradeWithoutSlippage(firstExchangeInfo, secondExchangeInfo, "10000")
+      console.log(tradeReport1, "CHECK THIS")
+
       if (tradeProfitabilityReport.type == "uniswap"){
         params.buyType = 1
       }
