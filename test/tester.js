@@ -13,8 +13,8 @@ const {
 } = require("../artifacts/contracts/interfaces/IERC20.sol/IERC20.json");
 const IUniswapV3PoolABI = require("@uniswap/v3-core/artifacts/contracts/interfaces/IUniswapV3Pool.sol/IUniswapV3Pool.json");
 const Quoter = require("@uniswap/v3-periphery/artifacts/contracts/lens/Quoter.sol/Quoter.json");
-const { simulateTradeWithoutSlippage } = require("../utils/trade-analyzer");
 const { executeTrade } = require("../utils/trade-executor");
+const { simulateTradeWithSlippage, simulateTradeWithoutSlippage } = require("../utils/trade-analyzer");
 
 const provider = waffle.provider;
 
@@ -40,7 +40,7 @@ describe("FlashSwap Contract", () => {
   const WETH_WHALE = "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619";
   const WMATIC_WHALE = "0xba12222222228d8ba445958a75a0704d566bf2c8";
 
-  // Token Addresses 
+  // Token Addresses
   const USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
   const DAI = "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063";
   const WMATIC = "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270";
@@ -63,7 +63,7 @@ describe("FlashSwap Contract", () => {
 
     const amountToBorrowInHuman = "100000";
     BORROW_AMOUNT = ethers.utils.parseUnits(amountToBorrowInHuman, DECIMALS);
-    initialFundingHuman = "200000";
+    initialFundingHuman = "100000";
     FUND_AMOUNT = ethers.utils.parseUnits(initialFundingHuman, DECIMALS);
     const flashSwapFactory = await ethers.getContractFactory(
       "UniswapCrossFlash"
@@ -83,6 +83,7 @@ describe("FlashSwap Contract", () => {
     );
     await FLASHSWAPV3.deployed();
 
+
     // fund singer account
     await impersonateFundErc20(
       tokenBase,
@@ -91,6 +92,9 @@ describe("FlashSwap Contract", () => {
       initialFundingHuman,
       DECIMALS
     );
+
+    console.log("ERROR BOUNDARY...")
+
 
     // fund sniper contract
     await impersonateFundErc20(
@@ -114,32 +118,45 @@ describe("FlashSwap Contract", () => {
       let firstExchangeInfo = {
         type: null,
         contractInstance: null,
-        params: null
-      }
+        params: null,
+      };
 
       let secondExchangeInfo = {
         type: null,
         contractInstance: null,
-        params: null
-      }
-
+        params: null,
+      };
 
       // MAJOR - set up all contracts
       // create signer
-      const [person] = await ethers.getSigners()
+      const [person] = await ethers.getSigners();
 
       // uniswap router contract
-      const uniswapRouterContract = new ethers.Contract(_swapRouter, uniswapRouterAbi, provider)
+      const uniswapRouterContract = new ethers.Contract(
+        _swapRouter,
+        uniswapRouterAbi,
+        provider
+      );
 
       // quoter contract
-      const uniswapQuoterContract = new ethers.Contract(_quoterAddress, Quoter.abi, provider)
+      const uniswapQuoterContract = new ethers.Contract(
+        _quoterAddress,
+        Quoter.abi,
+        provider
+      );
 
       // token contract
-      const baseTokenContract = new ethers.Contract(BASE_TOKEN_ADDRESS, abi, provider)
+      const baseTokenContract = new ethers.Contract(
+        BASE_TOKEN_ADDRESS,
+        abi,
+        provider
+      );
       // sushiswap router contract
-      const sushiswapRouterContract = new ethers.Contract(_sushiSwapRouter, sushiAbi, provider)
-
-
+      const sushiswapRouterContract = new ethers.Contract(
+        _sushiSwapRouter,
+        sushiAbi,
+        provider
+      );
 
       // add exchange contract
       firstExchangeInfo = {
@@ -150,10 +167,9 @@ describe("FlashSwap Contract", () => {
           to: WETH,
           fee: 3000,
           amount: "10000",
-          sqrtPrice: 0
-        }
-      }
-
+          sqrtPrice: 0,
+        },
+      };
 
       secondExchangeInfo = {
         type: "sushiswap",
@@ -163,11 +179,9 @@ describe("FlashSwap Contract", () => {
           to: WETH,
           fee: 3000,
           amount: "10000",
-          sqrtPrice: 0
-        }
-      }
-
-
+          sqrtPrice: 0,
+        },
+      };
 
       // MAJOR - check which exchange is profitable to  to buy from which to sell
       let params = {
@@ -183,25 +197,37 @@ describe("FlashSwap Contract", () => {
         buyType: 0, // 1 buy uniswap
       };
 
-      
+      console.log("GOT Here")
       // call checkProfitableBuyExchange()
       // const tradeProfitabilityReport = await checkProfitableBuyExchange(firstExchangeInfo, secondExchangeInfo, "10000", 3000)
-      const tradeReport1 = simulateTradeWithoutSlippage(firstExchangeInfo, secondExchangeInfo, "10000")
-      console.log(tradeReport1, "CHECK THIS")
+      const tradeReport1 = await simulateTradeWithSlippage(
+        firstExchangeInfo,
+        secondExchangeInfo,
+        "10000"
+      );
 
-      if (tradeProfitabilityReport.type == "uniswap"){
-        params.buyType = 1
-      }
+      const tradeReport2 = await simulateTradeWithoutSlippage(
+        firstExchangeInfo,
+        secondExchangeInfo,
+        "10000"
+      )
+      console.log(tradeReport1, "TRADE Report with slippage");
 
-      if (tradeProfitabilityReport.type == "sushiswap"){
-        params.buyType = 0
-      }
-      await executeTrade(tradeProfitabilityReport, FLASHSWAPV3, params)
-      console.log(tradeProfitabilityReport, "HULI")
+      console.log(tradeReport2, "TRADE Report without slippage");
+
+
+      // if (tradeProfitabilityReport.type == "uniswap"){
+      //   params.buyType = 1
+      // }
+
+      // if (tradeProfitabilityReport.type == "sushiswap"){
+      //   params.buyType = 0
+      // }
+      // await executeTrade(tradeProfitabilityReport, FLASHSWAPV3, params)
+      // console.log(tradeProfitabilityReport, "HULI")
 
       // MAJOR - execute trade
       //  call execute trade with swap type
-
     }).timeout(10000000);
   });
 });

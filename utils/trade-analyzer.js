@@ -3,9 +3,10 @@ const {
   getMostProfitableExchangeByComparison,
   fetchReverseSellResult,
   exchangeSelectorForConclusiveAmountsOutReversed,
+  exchangeSelectorForConclusiveAmountsOut,
 } = require("./trade-utils");
 
-async function simulateTradeWithSlippage(
+async function simulateTradeWithoutSlippage(
   firstExchangeInfo,
   secondExchangeInfo,
   tradeAmount
@@ -65,16 +66,20 @@ async function simulateTradeWithSlippage(
 
   // check profitability by determining reverse amount from sell exchange rate
   let returnAmountInfo = { amountOut: 0, exchangeType: "" };
-  returnAmountInfo = fetchReverseSellResult(
+  returnAmountInfo = await fetchReverseSellResult(
     buyExchange,
     firstExchangeInfo,
+    secondExchangeInfo,
     maximumAmountOutForFirstEx,
     smallAmountOutForOneQuantityFirstEx,
     maximumAmountOutForSecondEx,
     smallAmountOutForOneQuantitySecondEx
   );
+
   // is profitable if amount out is greater than trade amount + fee
-  let isProfitable = Number(tradeAmount) + ((tradeAmount * 3) / 997 + 1);
+  let isProfitable = Number(returnAmountInfo.amountOut) > Number(tradeAmount) + ((Number(tradeAmount) * 3) / 997 + 1);
+  console.log(Number(returnAmountInfo.amountOut), ((Number(tradeAmount) * 3) / 997 + 1),  "CHECK THIS")
+
 
   // return buy exchange, sell Exchange, profitability, tradeAmount, to Amount after Buy, from amount after sell
   return (tradeReport = {
@@ -90,7 +95,7 @@ async function simulateTradeWithSlippage(
   });
 }
 
-async function simulateTradeWithoutSlippage(
+async function simulateTradeWithSlippage(
   firstExchangeInfo,
   secondExchangeInfo,
   tradeAmount
@@ -118,9 +123,14 @@ async function simulateTradeWithoutSlippage(
   // now set amount out into sell exchange
   let amountOutReversed = await exchangeSelectorForConclusiveAmountsOutReversed(
     sellExchange == firstExchangeInfo.type
-      ? maximumAmountOutForFirstExTraded
-      : maximumAmountOutForSecondExTraded
+      ? firstExchangeInfo
+      : secondExchangeInfo,
+    sellExchange == firstExchangeInfo.type
+      ? ethers.utils.parseUnits(maximumAmountOutForFirstExTraded, 18)
+      : ethers.utils.parseUnits(maximumAmountOutForSecondExTraded, 18)
   );
+
+  console.log("AMOUNT OUT REVERSED", amountOutReversed)
   // check if amount out is greater than trade amount
   // is profitable if amount out is greater than trade amount + fee
   let isProfitable =
